@@ -32,7 +32,7 @@ pip install malmoenv gymnasium numpy pillow lxml
 
 ### 3. Download MalmoPlatform
 
-From the root directory, run:
+From the root directory (of this repo), run:
 
 ```bash
 python -c "import malmoenv.bootstrap; malmoenv.bootstrap.download()"
