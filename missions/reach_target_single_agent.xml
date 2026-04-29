@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Mission xmlns="http://ProjectMalmo.microsoft.com"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <About>
+        <Summary>Find and hit the pig</Summary>
+    </About>
+
+    <ModSettings>
+        <MsPerTick>20</MsPerTick>
+    </ModSettings>
+
+    <ServerSection>
+        <ServerInitialConditions>
+            <Time>
+                <StartTime>1000</StartTime>
+                <AllowPassageOfTime>false</AllowPassageOfTime>
+            </Time>
+            <Weather>clear</Weather>
+            <AllowSpawning>false</AllowSpawning>
+        </ServerInitialConditions>
+
+        <ServerHandlers>
+            <FlatWorldGenerator generatorString="3;7,2x3,2;1;" forceReset="true" />
+
+            <DrawingDecorator>
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="6" z2="12" type="air" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
+
+                <!-- <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="4" z2="0" type="stone" />
+                <DrawCuboid x1="0" y1="3" z1="12" x2="12" y2="4" z2="12" type="stone" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="0" y2="4" z2="12" type="stone" />
+                <DrawCuboid x1="12" y1="3" z1="0" x2="12" y2="4" z2="12" type="stone" /> -->
+
+                <!-- <DrawBlock x="5" y="3" z="5" type="stone" />
+                <DrawBlock x="5" y="3" z="6" type="stone" />
+                <DrawBlock x="6" y="3" z="5" type="stone" />
+                <DrawBlock x="8" y="3" z="8" type="stone" /> -->
+
+                <DrawEntity x="9.5" y="4" z="9.5" type="Pig" />
+            </DrawingDecorator>
+
+            <ServerQuitFromTimeUp timeLimitMs="20000" />
+            <ServerQuitWhenAnyAgentFinishes />
+        </ServerHandlers>
+    </ServerSection>
+
+    <AgentSection mode="Survival">
+        <Name>Agent0</Name>
+
+        <AgentStart>
+            <Placement x="2.5" y="4.0" z="2.5" yaw="0" pitch="20" />
+        </AgentStart>
+
+        <AgentHandlers>
+            <DiscreteMovementCommands>
+                <ModifierList type="allow-list">
+                    <command>move</command>
+                    <command>turn</command>
+                    <!-- <command>attack</command> -->
+                </ModifierList>
+            </DiscreteMovementCommands>
+
+            <ObservationFromNearbyEntities>
+                <Range name="entities" xrange="12" yrange="2" zrange="12" />
+            </ObservationFromNearbyEntities>
+
+            <ObservationFromGrid>
+                <Grid absoluteCoords="true" name="board">
+                    <min x="0" y="3" z="0" />
+                    <max x="12" y="3" z="12" />
+                </Grid>
+            </ObservationFromGrid>
+
+            <ObservationFromFullStats />
+
+            <RewardForSendingCommand reward="-0.01" />
+
+            <RewardForDamagingEntity>
+                <Mob type="Pig" reward="20" />
+            </RewardForDamagingEntity>
+
+            <VideoProducer want_depth="false">
+                <Width>300</Width>
+                <Height>200</Height>
+            </VideoProducer>
+        </AgentHandlers>
+    </AgentSection>
+</Mission>

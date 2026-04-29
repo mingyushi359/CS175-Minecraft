@@ -55,3 +55,21 @@ python sample_scripts/run.py --mission sample_missions/mobchase_single_agent.xml
 ```
 
 The original sample scripts and missions are located in `MalmoPlatform/MalmoEnv/` and `MalmoPlatform/MalmoEnv/Missions`
+
+---
+
+## Training DQN Agent
+<!-- To train a DQN agent, run: -->
+
+```bash
+python train/train_dqn.py --mission missions/reach_target_single_agent.xml --task train/tasks/mob_chase.py --episodes 700 --episodemaxsteps 100 --model-path q_model
+```
+
+--task defines the specific file that contains the additional reward function for the task (e.g., train/tasks/mob_chase.py)
+
+## Evaluation
+<!-- To evaluate a trained DQN agent, run: -->
+
+```bash
+python train/train_dqn.py --mission missions/reach_target_single_agent.xml --eval --task train/tasks/mob_chase.py --episodes 5 --episodemaxsteps 100 --model-path q_model
+```
