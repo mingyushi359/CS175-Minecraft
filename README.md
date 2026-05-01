@@ -58,8 +58,19 @@ The original sample scripts and missions are located in `MalmoPlatform/MalmoEnv/
 
 ---
 
+## Training PPO Agent
+
+```bash
+python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
+```
+
+## Evaluating PPO Agent
+
+```bash
+python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --task-py train/tasks/mob_chase.py --eval --model-path ppo_logs/out1/ppo_final.zip --episodes 5 --episodemaxsteps 100 --task-py train/tasks/mob_chase.py
+```
+
 ## Training DQN Agent
-<!-- To train a DQN agent, run: -->
 
 ```bash
 python train/train_dqn.py --mission missions/reach_target_single_agent.xml --task train/tasks/mob_chase.py --episodes 700 --episodemaxsteps 100 --model-path q_model
@@ -67,8 +78,7 @@ python train/train_dqn.py --mission missions/reach_target_single_agent.xml --tas
 
 --task defines the specific file that contains the additional reward function for the task (e.g., train/tasks/mob_chase.py)
 
-## Evaluation
-<!-- To evaluate a trained DQN agent, run: -->
+## Evaluating DQN Agent
 
 ```bash
 python train/train_dqn.py --mission missions/reach_target_single_agent.xml --eval --task train/tasks/mob_chase.py --episodes 5 --episodemaxsteps 100 --model-path q_model

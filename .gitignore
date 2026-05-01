@@ -227,3 +227,4 @@ logs/
 *.log
 *.pt
 *.pth
+*.zip

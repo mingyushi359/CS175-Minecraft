@@ -3,11 +3,11 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
     <About>
-        <Summary>Collect wood logs</Summary>
+        <Summary>Find and hit the pig</Summary>
     </About>
 
     <ModSettings>
-        <MsPerTick>5</MsPerTick>
+        <MsPerTick>20</MsPerTick>
     </ModSettings>
 
     <ServerSection>
@@ -24,27 +24,28 @@
             <FlatWorldGenerator generatorString="3;7,2x3,2;1;" forceReset="true" />
 
             <DrawingDecorator>
-                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="8" z2="12" type="air" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="6" z2="12" type="air" />
                 <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
 
-                <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="0" type="stone" />
-                <DrawCuboid x1="0" y1="3" z1="12" x2="12" y2="3" z2="12" type="stone" />
-                <DrawCuboid x1="0" y1="3" z1="0" x2="0" y2="3" z2="12" type="stone" />
-                <DrawCuboid x1="12" y1="3" z1="0" x2="12" y2="3" z2="12" type="stone" />
+                <!-- <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="4" z2="0" type="stone" />
+                <DrawCuboid x1="0" y1="3" z1="12" x2="12" y2="4" z2="12" type="stone" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="0" y2="4" z2="12" type="stone" />
+                <DrawCuboid x1="12" y1="3" z1="0" x2="12" y2="4" z2="12" type="stone" /> -->
 
-                <DrawBlock x="5" y="4" z="5" type="log" variant="oak" />
-                <DrawBlock x="5" y="5" z="5" type="log" variant="oak" />
-                <DrawBlock x="5" y="6" z="5" type="log" variant="oak" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="4" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
 
-                <DrawBlock x="8" y="4" z="8" type="log" variant="oak" />
-                <DrawBlock x="8" y="5" z="8" type="log" variant="oak" />
-                <DrawBlock x="8" y="6" z="8" type="log" variant="oak" />
+                <!-- <DrawBlock x="5" y="3" z="5" type="stone" />
+                <DrawBlock x="5" y="3" z="6" type="stone" />
+                <DrawBlock x="6" y="3" z="5" type="stone" />
+                <DrawBlock x="8" y="3" z="8" type="stone" /> -->
 
-                <DrawCuboid x1="4" y1="7" z1="4" x2="6" y2="7" z2="6" type="leaves" variant="oak" />
-                <DrawCuboid x1="7" y1="7" z1="7" x2="9" y2="7" z2="9" type="leaves" variant="oak" />
+                <DrawEntity x="11.5" y="4" z="11.5" type="Pig" />
             </DrawingDecorator>
 
-            <ServerQuitFromTimeUp timeLimitMs="40000" />
+            <ServerQuitFromTimeUp timeLimitMs="30000" />
             <ServerQuitWhenAnyAgentFinishes />
         </ServerHandlers>
     </ServerSection>
@@ -53,7 +54,7 @@
         <Name>Agent0</Name>
 
         <AgentStart>
-            <Placement x="2.5" y="4.0" z="2.5" yaw="0" pitch="20" />
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="20" />
         </AgentStart>
 
         <AgentHandlers>
@@ -61,32 +62,28 @@
                 <ModifierList type="allow-list">
                     <command>move</command>
                     <command>turn</command>
-                    <command>attack</command>
+                    <!-- <command>attack</command> -->
                 </ModifierList>
             </DiscreteMovementCommands>
 
             <ObservationFromNearbyEntities>
-                <Range name="entities" xrange="12" yrange="4" zrange="12" />
+                <Range name="entities" xrange="12" yrange="2" zrange="12" />
             </ObservationFromNearbyEntities>
 
             <ObservationFromGrid>
                 <Grid absoluteCoords="true" name="board">
                     <min x="0" y="3" z="0" />
-                    <max x="12" y="7" z="12" />
+                    <max x="12" y="3" z="12" />
                 </Grid>
             </ObservationFromGrid>
 
             <ObservationFromFullStats />
 
-            <RewardForSendingCommand reward="-0.02" />
+            <RewardForSendingCommand reward="-0.01" />
 
-            <RewardForCollectingItem>
-                <Item reward="25" type="log" />
-            </RewardForCollectingItem>
-
-            <AgentQuitFromCollectingItem>
-                <Item amount="2" type="log" />
-            </AgentQuitFromCollectingItem>
+            <!-- <RewardForDamagingEntity>
+                <Mob type="Pig" reward="20" />
+            </RewardForDamagingEntity> -->
 
             <VideoProducer want_depth="false">
                 <Width>160</Width>
