@@ -5,14 +5,17 @@ TARGET_ENTITY = "Pig"
 
 REACH_DISTANCE = 2.0
 REACH_REWARD = 25.0
-DISTANCE_PROGRESS_SCALE = 5.0
-LOOK_PROGRESS_SCALE = 0.02
+DISTANCE_PROGRESS_SCALE = 3.0
+LOOK_PROGRESS_SCALE = 0.03
 
-# GOOD_FACING_DEGREES = 30.0
+GOOD_FACING_DEGREES = 45.0
+OK_FACING_DEGREES = 60.0
 BAD_FACING_DEGREES = 90.0
+GOOD_FACING_REWARD = 0.03
 
 FORWARD_ACTION = 0
-BAD_FORWARD_PENALTY = -0.02
+BAD_FORWARD_PENALTY = -0.10
+NO_PROGRESS_PENALTY = -0.20
 
 # BACKWARD_ACTION = 1
 # BACKWARD_PENALTY = -0.1
@@ -20,11 +23,16 @@ BAD_FORWARD_PENALTY = -0.02
 # ATTACK_ACTION = 4
 # FAR_ATTACK_PENALTY = -0.05
 
+stuck_forward_counter = 0
+
 def reset():
-    pass
+    global stuck_forward_counter
+    stuck_forward_counter = 0
 
 
 def shape_reward(raw_reward, prev_info, curr_info, action, step):
+    global stuck_forward_counter
+
     reward = float(raw_reward)
     done = False
     metrics = {}
@@ -44,18 +52,36 @@ def shape_reward(raw_reward, prev_info, curr_info, action, step):
         distance_progress = prev_target["distance"] - curr_target["distance"]
         look_progress = prev_target["yaw_error"] - curr_target["yaw_error"]
 
-        reward += DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
+        # reward += DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
         reward += LOOK_PROGRESS_SCALE * clamp(look_progress, -10.0, 10.0)
 
-    if curr_target["distance"] <= REACH_DISTANCE:
-        # reward for reaching the target
+        if curr_target["yaw_error"] <= OK_FACING_DEGREES:
+            # give distance reward only when roughly facing the target
+            reward += DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
+
+        if curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
+            # extra reward for facing the target
+            reward += GOOD_FACING_REWARD
+
+        if action == FORWARD_ACTION and curr_target["yaw_error"] > BAD_FACING_DEGREES:
+            # penalty for moving forward when not facing the target
+            reward += BAD_FORWARD_PENALTY
+
+        if action == FORWARD_ACTION and distance_progress <= 0.01:
+            # penalty for not making no progress when moving forward (e.g. moving against a wall)
+            reward += NO_PROGRESS_PENALTY
+            stuck_forward_counter += 1
+            if stuck_forward_counter >= 5:
+                reward -= 0.40
+        else:
+            stuck_forward_counter = 0
+                
+
+    if curr_target["distance"] <= REACH_DISTANCE and curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
+        # reward for reaching and facing the target
         reward += REACH_REWARD
         done = True
         # print(f"REACHED target at step={step}, distance={curr_target['distance']:.2f}")
-
-    if action == FORWARD_ACTION and curr_target["yaw_error"] > BAD_FACING_DEGREES:
-        # penalty for moving forward when not facing the target
-        reward += BAD_FORWARD_PENALTY
 
     # if action == ATTACK_ACTION and (curr_target["distance"] > REACH_DISTANCE + 0.5 or curr_target["yaw_error"] > BAD_FACING_DEGREES):
     #     # penalty for attacking when not close to and facing the target

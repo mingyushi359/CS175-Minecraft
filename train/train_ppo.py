@@ -115,6 +115,13 @@ class MalmoStructuredEnv(gym.Env):
         xml = Path(args.mission).read_text()
         self.env = malmoenv.make()
 
+        custom_actions = ActionSpace([
+            "move 1",
+            # "move -1",
+            "turn 1",
+            "turn -1",
+        ])
+
         self.env.init(
             xml,
             args.port,
@@ -125,7 +132,7 @@ class MalmoStructuredEnv(gym.Env):
             exp_uid=args.experimentUniqueId,
             episode=args.episode,
             resync=args.resync,
-            # action_space = custom_actions,
+            action_space = custom_actions,
         )
 
         print({i: self.env.action_space[i] for i in range(self.env.action_space.n)})
