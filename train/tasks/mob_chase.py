@@ -13,6 +13,9 @@ OK_FACING_DEGREES = 60.0
 BAD_FACING_DEGREES = 90.0
 GOOD_FACING_REWARD = 0.03
 
+TURN_ACTIONS = [1, 2]  # left, right
+UNNECESSARY_TURN_PENALTY = -0.08
+
 FORWARD_ACTION = 0
 BAD_FORWARD_PENALTY = -0.10
 NO_PROGRESS_PENALTY = -0.20
@@ -62,6 +65,14 @@ def shape_reward(raw_reward, prev_info, curr_info, action, step):
         if curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
             # extra reward for facing the target
             reward += GOOD_FACING_REWARD
+
+        if action == FORWARD_ACTION and curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
+            # reward for moving forward when facing the target
+            reward += 0.08
+
+        if action in TURN_ACTIONS and curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
+            # penalty for turning when already facing the target
+            reward += UNNECESSARY_TURN_PENALTY
 
         if action == FORWARD_ACTION and curr_target["yaw_error"] > BAD_FACING_DEGREES:
             # penalty for moving forward when not facing the target

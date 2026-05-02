@@ -269,7 +269,7 @@ if __name__ == '__main__':
         )
 
         checkpoint_callback = CheckpointCallback(
-            save_freq=10000,
+            save_freq=5000,
             save_path=args.model_path,
             name_prefix="ppo"
         )
