@@ -114,26 +114,35 @@ class MalmoStructuredEnv(gym.Env):
 
         xml = Path(args.mission).read_text()
         self.env = malmoenv.make()
+        
+        # custom actions can be defined in the task specific reward module and mission XML
+        custom_actions = getattr(task_module, "CUSTOM_ACTIONS", None) if task_module else None
 
-        custom_actions = ActionSpace([
-            "move 1",
-            # "move -1",
-            "turn 1",
-            "turn -1",
-        ])
-
-        self.env.init(
-            xml,
-            args.port,
-            server=args.server,
-            server2=args.server2,
-            port2=args.port2,
-            role=args.role,
-            exp_uid=args.experimentUniqueId,
-            episode=args.episode,
-            resync=args.resync,
-            action_space = custom_actions,
-        )
+        if custom_actions is not None:
+            self.env.init(
+                xml,
+                args.port,
+                server=args.server,
+                server2=args.server2,
+                port2=args.port2,
+                role=args.role,
+                exp_uid=args.experimentUniqueId,
+                episode=args.episode,
+                resync=args.resync,
+                action_space = ActionSpace(custom_actions),  
+            )
+        else:  # default action space will be inferred from the mission XML only
+            self.env.init(
+                xml,
+                args.port,
+                server=args.server,
+                server2=args.server2,
+                port2=args.port2,
+                role=args.role,
+                exp_uid=args.experimentUniqueId,
+                episode=args.episode,
+                resync=args.resync,
+            )
 
         print({i: self.env.action_space[i] for i in range(self.env.action_space.n)})
 
@@ -248,7 +257,7 @@ if __name__ == '__main__':
                 episode_reward += reward
                 steps += 1
 
-                time.sleep(0.5)
+                time.sleep(0.25)
 
             print(
                 f"EVAL episode={i}, steps={steps}, "

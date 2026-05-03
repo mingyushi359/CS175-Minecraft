@@ -68,6 +68,7 @@
                 <ModifierList type="allow-list">
                     <command>move</command>
                     <command>turn</command>
+                    <command>strafe</command>
                     <!-- <command>attack</command> -->
                 </ModifierList>
             </DiscreteMovementCommands>

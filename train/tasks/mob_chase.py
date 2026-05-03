@@ -1,7 +1,10 @@
+# defines task-specific reward shaping for mob chase
 import math
 
 TASK_ID = 2
 TARGET_ENTITY = "Pig"
+# custom actions, required for train_ppo.py, else actions will be inferred from the XML only
+CUSTOM_ACTIONS = ["move 1", "turn 1", "turn -1", "strafe 1", "strafe -1"]
 
 REACH_DISTANCE = 2.0
 REACH_REWARD = 25.0
@@ -20,21 +23,23 @@ FORWARD_ACTION = 0
 BAD_FORWARD_PENALTY = -0.10
 NO_PROGRESS_PENALTY = -0.20
 
+MOVEMENT_ACTIONS = [0, 3, 4]  # forward, strafe left/right
+
 # BACKWARD_ACTION = 1
 # BACKWARD_PENALTY = -0.1
 
 # ATTACK_ACTION = 4
 # FAR_ATTACK_PENALTY = -0.05
 
-stuck_forward_counter = 0
+stuck_movement_counter = 0
 
 def reset():
-    global stuck_forward_counter
-    stuck_forward_counter = 0
+    global stuck_movement_counter
+    stuck_movement_counter = 0
 
 
 def shape_reward(raw_reward, prev_info, curr_info, action, step):
-    global stuck_forward_counter
+    global stuck_movement_counter
 
     reward = float(raw_reward)
     done = False
@@ -78,14 +83,14 @@ def shape_reward(raw_reward, prev_info, curr_info, action, step):
             # penalty for moving forward when not facing the target
             reward += BAD_FORWARD_PENALTY
 
-        if action == FORWARD_ACTION and distance_progress <= 0.01:
+        if action in MOVEMENT_ACTIONS and distance_progress <= 0.01:
             # penalty for not making no progress when moving forward (e.g. moving against a wall)
             reward += NO_PROGRESS_PENALTY
-            stuck_forward_counter += 1
-            if stuck_forward_counter >= 5:
+            stuck_movement_counter += 1
+            if stuck_movement_counter >= 5:
                 reward -= 0.40
         else:
-            stuck_forward_counter = 0
+            stuck_movement_counter = 0
                 
 
     if curr_target["distance"] <= REACH_DISTANCE and curr_target["yaw_error"] <= GOOD_FACING_DEGREES:
