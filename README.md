@@ -75,7 +75,11 @@ Training (avg stpes and reward) usually starts to degrade before 50k timesteps, 
 ```bash
 python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --task-py train/tasks/mob_chase.py --eval --model-path ppo_logs/out1/ppo_final.zip --episodes 5 --episodemaxsteps 100 --task-py train/tasks/mob_chase.py
 ```
-Might need to change `deterministic` to `False` in `train_ppo.py` for better evaluation results
+In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation, which perform better in some cases
+
+## Example Recording
+<img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
+<img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
 
 ---
 
