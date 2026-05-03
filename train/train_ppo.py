@@ -6,6 +6,7 @@ import math
 import time
 from pathlib import Path
 
+import imageio.v2 as imageio
 import malmoenv
 from malmoenv.core import ActionSpace
 import numpy as np
@@ -111,6 +112,7 @@ class MalmoStructuredEnv(gym.Env):
         self.task_id = getattr(task_module, "TASK_ID", 0) if task_module else 0
         self.steps = 0
         self.prev_info_dict = None
+        self.last_frame = None
 
         xml = Path(args.mission).read_text()
         self.env = malmoenv.make()
@@ -167,6 +169,8 @@ class MalmoStructuredEnv(gym.Env):
 
         # dummy step to get observation space dimensions
         obs, reward, done, info = self.env.step(0)
+        self.last_frame = obs
+        self.obs_shape = self.env.observation_space.shape
         info_dict = json.loads(info) if info else {}
         if info_dict:
             state = build_state(info_dict, task_id=self.task_id)
@@ -179,6 +183,7 @@ class MalmoStructuredEnv(gym.Env):
         self.steps += 1
 
         obs, reward, done, info = self.env.step(int(action))
+        self.last_frame = obs
         info_dict = json.loads(info) if info else {}
 
         reward = float(reward)
@@ -227,6 +232,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-path', type=str, default='ppo_model', help='path to save/load PPO model')
     parser.add_argument('--eval', action='store_true', help='run trained PPO model instead of training')
     parser.add_argument('--task-py', type=str, default=None, help='optional Python task reward file')
+    parser.add_argument('--record', action='store_true', help='record videos during evaluation')
 
     args = parser.parse_args()
     if args.server2 is None:
@@ -237,6 +243,8 @@ if __name__ == '__main__':
 
     if args.eval:
         model = PPO.load(args.model_path, env=env, device="cpu")
+        record_dir = Path(args.model_path).parent / "ppo_eval_records"
+        record_dir.mkdir(exist_ok=True)
 
         for i in range(args.episodes):
             obs, info = env.reset()
@@ -246,6 +254,10 @@ if __name__ == '__main__':
             episode_reward = 0.0
             steps = 0
             action_counts = {}
+            
+            frames = []
+            if env.last_frame is not None:
+                frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
 
             while not terminated and not truncated:
                 action, _ = model.predict(obs, deterministic=True)
@@ -257,7 +269,14 @@ if __name__ == '__main__':
                 episode_reward += reward
                 steps += 1
 
+                if env.last_frame is not None:
+                    frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
+
                 time.sleep(0.25)
+
+            if args.record and frames:
+                record_path = record_dir / f"episode_{i}_reward_{episode_reward:.2f}.gif"
+                imageio.mimsave(record_path, frames, fps=4)
 
             print(
                 f"EVAL episode={i}, steps={steps}, "

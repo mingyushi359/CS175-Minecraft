@@ -228,3 +228,5 @@ logs/
 *.pt
 *.pth
 *.zip
+*.gif
+*.mp4
