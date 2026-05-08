@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Mission xmlns="http://ProjectMalmo.microsoft.com"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <About>
+        <Summary>Instruction-conditioned multi-target navigation</Summary>
+    </About>
+
+    <ModSettings>
+        <MsPerTick>20</MsPerTick>
+    </ModSettings>
+
+    <ServerSection>
+        <ServerInitialConditions>
+            <Time>
+                <StartTime>1000</StartTime>
+                <AllowPassageOfTime>false</AllowPassageOfTime>
+            </Time>
+            <Weather>clear</Weather>
+            <AllowSpawning>false</AllowSpawning>
+        </ServerInitialConditions>
+
+        <ServerHandlers>
+            <FlatWorldGenerator generatorString="3;7,2x3,2;1;" forceReset="true" />
+
+            <DrawingDecorator>
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="6" z2="12" type="air" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
+
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="4" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
+
+                <!-- Visual-only landmarks, moved far outside the arena. -->
+                <DrawCuboid x1="-30" y1="4" z1="6" x2="-30" y2="10" z2="6" type="diamond_block" />
+                <DrawCuboid x1="42" y1="4" z1="6" x2="42" y2="10" z2="6" type="gold_block" />
+                <DrawCuboid x1="6" y1="4" z1="-30" x2="6" y2="10" z2="-30" type="emerald_block" />
+                <DrawCuboid x1="6" y1="4" z1="42" x2="6" y2="10" z2="42" type="redstone_block" />
+
+                <!-- Multi-task targets inside the arena. -->
+                <DrawEntity x="11.5" y="4" z="11.5" type="Pig" />
+                <DrawBlock x="11" y="4" z="1" type="emerald_block" />
+                <DrawBlock x="6" y="4" z="11" type="log" />
+            </DrawingDecorator>
+
+            <ServerQuitFromTimeUp timeLimitMs="30000" />
+            <ServerQuitWhenAnyAgentFinishes />
+        </ServerHandlers>
+    </ServerSection>
+
+    <AgentSection mode="Survival">
+        <Name>Agent0</Name>
+
+        <AgentStart>
+            <Placement x="1.5" y="4.0" z="3.5" yaw="270" pitch="20" />
+        </AgentStart>
+
+        <AgentHandlers>
+            <DiscreteMovementCommands>
+                <ModifierList type="allow-list">
+                    <command>move</command>
+                    <command>turn</command>
+                    <command>strafe</command>
+                </ModifierList>
+            </DiscreteMovementCommands>
+
+            <ObservationFromNearbyEntities>
+                <Range name="entities" xrange="12" yrange="2" zrange="12" />
+            </ObservationFromNearbyEntities>
+
+            <ObservationFromGrid>
+                <Grid absoluteCoords="false" name="board">
+                    <min x="-12" y="-1" z="-12" />
+                    <max x="12" y="1" z="12" />
+                </Grid>
+            </ObservationFromGrid>
+
+            <ObservationFromFullStats />
+
+            <RewardForSendingCommand reward="-0.01" />
+
+            <VideoProducer want_depth="false">
+                <Width>400</Width>
+                <Height>300</Height>
+            </VideoProducer>
+        </AgentHandlers>
+    </AgentSection>
+</Mission>

@@ -98,7 +98,7 @@ class MalmoStructuredEnv(gym.Env):
         self.steps = 0
         self.prev_info_dict = None
         if self.task_module:
-            self.task_module.reset()
+            self.task_module.reset(instruction=self.args.instruction, eval_mode=self.args.eval)
 
         # dummy step to get observation space dimensions
         obs, reward, done, info = self.env.step(0)
@@ -166,6 +166,8 @@ if __name__ == '__main__':
     parser.add_argument('--eval', action='store_true', help='run trained PPO model instead of training')
     parser.add_argument('--task-py', type=str, default=None, help='optional Python task reward file')
     parser.add_argument('--record', action='store_true', help='record videos during evaluation')
+    parser.add_argument('--instruction', type=str, default=None, help='text instruction for eval')
+
 
     args = parser.parse_args()
     if args.server2 is None:
