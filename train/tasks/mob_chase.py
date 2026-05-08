@@ -1,7 +1,7 @@
 # defines task-specific reward shaping for mob chase
-import math
+from tasks.base_task import BaseTask
 
-class Task:
+class Task(BaseTask):
     # task specific class for chasing a mob (pig)
     TASK_ID = 1
     TARGET_ENTITY = "Pig"
@@ -30,6 +30,7 @@ class Task:
     MOVEMENT_ACTIONS = [0, 3, 4]  # forward, strafe left/right
 
     def __init__(self):
+        super().__init__()
         self.stuck_movement_counter = 0
 
     def reset(self):
@@ -43,7 +44,7 @@ class Task:
         pitch = float(info_dict.get("Pitch", 0))
         agent_features = [yaw / 180.0, pitch / 90.0]
 
-        target = self.find_target(info_dict)  # finds the nearest pig
+        target = self.find_nearest_entity(info_dict, self.TARGET_ENTITY)  # finds the nearest pig
         if target is not None:
             entity_features = [
                 target["dx"] / 12.0,
@@ -63,8 +64,8 @@ class Task:
         done = False
         metrics = {}  # saving agent stats for debug purposes, not used
 
-        prev_target = self.find_target(prev_info)
-        curr_target = self.find_target(curr_info)
+        prev_target = self.find_nearest_entity(prev_info, self.TARGET_ENTITY)
+        curr_target = self.find_nearest_entity(curr_info, self.TARGET_ENTITY)
 
         if curr_target is None:
             return reward, done, metrics
@@ -112,50 +113,3 @@ class Task:
             # print(f"REACHED target at step={step}, distance={curr_target['distance']:.2f}")
 
         return reward, done, metrics
-
-
-    def find_target(self, info_dict):
-        # find the nearest target entity (pig) from info_dict given state
-        if not info_dict:
-            return None
-
-        agent_name = info_dict.get("Name")
-        agent_x = float(info_dict.get("XPos", 0.0))
-        agent_y = float(info_dict.get("YPos", 0.0))
-        agent_z = float(info_dict.get("ZPos", 0.0))
-        agent_yaw = float(info_dict.get("Yaw", 0.0))
-
-        best = None
-        for entity in info_dict.get("entities", []):
-            if entity.get("name") == agent_name:
-                continue
-            if entity.get("name") != self.TARGET_ENTITY:
-                continue
-
-            dx = float(entity.get("x", 0.0)) - agent_x
-            dy = float(entity.get("y", 0.0)) - agent_y
-            dz = float(entity.get("z", 0.0)) - agent_z
-            distance = math.sqrt(dx * dx + dy * dy + dz * dz)
-            yaw_error = self.yaw_error_to_target(agent_yaw, dx, dz)
-
-            if best is None or distance < best["distance"]:
-                # returns the nearest entity's distance and camera angle difference
-                best = {
-                    "dx": dx,
-                    "dy": dy,
-                    "dz": dz,
-                    "distance": distance, 
-                    "yaw_error": yaw_error,
-                    }
-
-        return best
-
-    def yaw_error_to_target(self, agent_yaw, dx, dz):
-        target_yaw = math.degrees(math.atan2(-dx, dz))
-        return abs(self.angle_difference_degrees(agent_yaw, target_yaw))
-
-    def angle_difference_degrees(self, a, b):
-        return (a - b + 180.0) % 360.0 - 180.0
-
-    def clamp(self, value, low, high):
-        return max(low, min(high, value))
