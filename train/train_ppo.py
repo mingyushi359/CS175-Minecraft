@@ -1,8 +1,6 @@
 import argparse
-from ast import While
 import importlib.util
 import json
-import math
 import time
 from pathlib import Path
 
@@ -15,101 +13,36 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-BLOCK_TO_ID = {
-    "air": 0,
-    "grass": 1,
-    "dirt": 2,
-    "clay": 3,
-    "brick_block": 4,
-    "log": 5,
-    "leaves": 6,
-    "stone": 7,
-    "planks": 8,
-    "emerald_block": 9,
-}
-
-ENTITY_TO_ID = {
-    "Chicken": 1,
-    "Pig": 2,
-    "Cow": 3,
-    "Sheep": 4,
-}
-
-
 def load_task_module(task_py):
+    # loads the task specific module
     if task_py is None:
         return None
 
     spec = importlib.util.spec_from_file_location("task_module", task_py)
     task_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(task_module)
+
+    if hasattr(task_module, "Task"):
+        return task_module.Task()
+
     return task_module
 
-def build_state(info_dict, task_id=0, max_entities=1, max_board_size=200):
-    # extracts basic state infos
-    x = float(info_dict.get("XPos", 0))
-    y = float(info_dict.get("YPos", 0))
-    z = float(info_dict.get("ZPos", 0))
-    yaw = float(info_dict.get("Yaw", 0))
-    pitch = float(info_dict.get("Pitch", 0))
-    life = float(info_dict.get("Life", 0))
-    food = float(info_dict.get("Food", 0))
-    air = float(info_dict.get("Air", 0))
+def build_state(info_dict, task_module=None):
+    # calls task specific module's build state
+    if task_module is not None:
+        state = task_module.build_state(info_dict)
+        return np.array(state, dtype=np.float32)
+    
+    raise ValueError("Need to define build_state() in task class")
 
-    agent_features = [
-        yaw / 180.0, pitch / 90.0
-    ]
-
-    entities = []
-    for entity in info_dict.get("entities", []):
-        # skip agent itself
-        if entity["name"] == info_dict.get("Name"):
-            continue
-
-        dx = float(entity["x"]) - x
-        dy = float(entity["y"]) - y
-        dz = float(entity["z"]) - z
-        distance = np.sqrt(dx * dx + dy * dy + dz * dz)
-        target_yaw = math.degrees(math.atan2(-dx, dz))
-        signed_yaw_error = (target_yaw - yaw + 180.0) % 360.0 - 180.0
-        entity_type = float(ENTITY_TO_ID.get(entity["name"], -1))
-
-        dist2 = dx * dx + dy * dy + dz * dz
-        entities.append((dist2, [dx / 12.0, dy / 5.0, dz / 12.0, distance / 17.0, signed_yaw_error / 180.0, entity_type / 10.0]))
- 
-    entities.sort(key=lambda x: x[0])
-
-    entity_features = []
-    # sort and only consider the closest max_entities entities
-    for _, entity in entities[:max_entities]:
-        entity_features.extend(entity)
-
-    # pad with zeros if there are less than max_entities entities
-    while len(entity_features) < max_entities * 6:
-        entity_features.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
-    board_features = []
-    for block in info_dict.get("board", []):
-        board_features.append(float(BLOCK_TO_ID.get(block, -1)))
-
-    if len(board_features) < max_board_size:
-        board_features.extend([0.0] * (max_board_size - len(board_features)))
-    else:
-        board_features = board_features[:max_board_size]
-
-    # state = agent_features + entity_features + board_features + [float(task_id)]
-    # skip board features for now
-    state = agent_features + entity_features + [float(task_id)]
-    return np.array(state, dtype=np.float32)
 
 class MalmoStructuredEnv(gym.Env):
     # Malmo env wrapper
     def __init__(self, args, task_module=None):
         super().__init__()
-
         self.args = args
         self.task_module = task_module
-        self.task_id = getattr(task_module, "TASK_ID", 0) if task_module else 0
+        self.task_id = task_module.TASK_ID if task_module is not None else 0
         self.steps = 0
         self.prev_info_dict = None
         self.last_frame = None
@@ -118,7 +51,7 @@ class MalmoStructuredEnv(gym.Env):
         self.env = malmoenv.make()
         
         # custom actions can be defined in the task specific reward module and mission XML
-        custom_actions = getattr(task_module, "CUSTOM_ACTIONS", None) if task_module else None
+        custom_actions = task_module.CUSTOM_ACTIONS if task_module else None
 
         if custom_actions is not None:
             self.env.init(
@@ -148,7 +81,7 @@ class MalmoStructuredEnv(gym.Env):
 
         print({i: self.env.action_space[i] for i in range(self.env.action_space.n)})
 
-        sample_state = build_state({}, task_id=self.task_id)
+        sample_state = build_state({}, task_module=self.task_module)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -164,7 +97,7 @@ class MalmoStructuredEnv(gym.Env):
         self.env.reset()
         self.steps = 0
         self.prev_info_dict = None
-        if self.task_module and hasattr(self.task_module, "reset"):
+        if self.task_module:
             self.task_module.reset()
 
         # dummy step to get observation space dimensions
@@ -173,7 +106,7 @@ class MalmoStructuredEnv(gym.Env):
         self.obs_shape = self.env.observation_space.shape
         info_dict = json.loads(info) if info else {}
         if info_dict:
-            state = build_state(info_dict, task_id=self.task_id)
+            state = build_state(info_dict, task_module=self.task_module)
             self.prev_info_dict = info_dict
         else:
             state = np.zeros(self.observation_space.shape, dtype=np.float32)
@@ -189,7 +122,7 @@ class MalmoStructuredEnv(gym.Env):
         reward = float(reward)
         task_done = False
 
-        if self.task_module and hasattr(self.task_module, "shape_reward"):
+        if self.task_module:
             reward, task_done, metrics = self.task_module.shape_reward(
                 raw_reward=reward,
                 prev_info=self.prev_info_dict,
@@ -199,7 +132,7 @@ class MalmoStructuredEnv(gym.Env):
             )
 
         if info_dict:
-            state = build_state(info_dict, task_id=self.task_id)
+            state = build_state(info_dict, task_module=self.task_module)
         else:
             state = np.zeros(self.observation_space.shape, dtype=np.float32)
 
