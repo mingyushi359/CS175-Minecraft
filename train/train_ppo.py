@@ -3,6 +3,7 @@ import importlib.util
 import json
 import time
 from pathlib import Path
+import utility
 
 import imageio.v2 as imageio
 import malmoenv
@@ -12,6 +13,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.monitor import Monitor
 
 def load_task_module(task_py):
     # loads the task specific module
@@ -204,7 +206,7 @@ if __name__ == '__main__':
                 episode_reward += reward
                 steps += 1
 
-                if env.last_frame is not None:
+                if env.last_frame is not None and env.last_frame.size != 0:
                     frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
 
                 time.sleep(0.25)
@@ -219,6 +221,9 @@ if __name__ == '__main__':
             )
 
     else:
+        log_dir = Path(args.model_path)
+        env = Monitor(env, filename=str(log_dir / "monitor.csv"))  # Monitor warpper for logging rewards
+
         model = PPO(
             "MlpPolicy",
             env,
@@ -228,6 +233,9 @@ if __name__ == '__main__':
             batch_size=64,
             gamma=0.99,
             ent_coef=0.01,
+            policy_kwargs=dict(
+                net_arch=dict(pi=[256, 256], vf=[256, 256])
+            ),
             device="cpu",
         )
 
@@ -237,8 +245,12 @@ if __name__ == '__main__':
             name_prefix="ppo"
         )
 
-        model.learn(total_timesteps=args.total_timesteps, callback=checkpoint_callback)
-        model.save(Path(args.model_path) / "ppo_final.zip")
-        print(f"Saved PPO model to {args.model_path}/ppo_final.zip")
+        try:
+            model.learn(total_timesteps=args.total_timesteps, callback=checkpoint_callback)
+            model.save(Path(args.model_path) / "ppo_final.zip")
+            print(f"Saved PPO model to {args.model_path}/ppo_final.zip")
+        finally:
+            if not args.eval:
+                utility.save_monitor_plots(log_dir)  # call save plots before exiting
 
     env.close()
