@@ -12,18 +12,18 @@ class Task(BaseTask):
     INSTRUCTION_GROUPS = {
         "pig": [
             "go to the pig",
-            "find the pig",
-            "chase the pig",
+            # "find the pig",
+            # "chase the pig",
         ],
         "emerald": [
             "go to the emerald",
-            "find the emerald",
-            "find the green block",
+            # "find the emerald",
+            # "find the green block",
         ],
         "log": [
             "go to the log",
-            "find the wood",
-            "find the wooden block",
+            # "find the wood",
+            # "find the wooden block",
         ],
     }
 

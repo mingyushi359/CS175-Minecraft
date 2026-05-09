@@ -27,10 +27,10 @@
                 <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="6" z2="12" type="air" />
                 <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
 
-                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="4" z2="0" type="spruce_fence" />
-                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="4" z2="12" type="spruce_fence" />
-                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
-                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="5" z1="0" x2="12" y2="4" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="5" z1="12" x2="12" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="5" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="5" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
 
                 <!-- Visual-only landmarks, moved far outside the arena. -->
                 <DrawCuboid x1="-30" y1="4" z1="6" x2="-30" y2="10" z2="6" type="diamond_block" />
@@ -39,9 +39,9 @@
                 <DrawCuboid x1="6" y1="4" z1="42" x2="6" y2="10" z2="42" type="redstone_block" />
 
                 <!-- Multi-task targets inside the arena. -->
-                <DrawEntity x="11.5" y="4" z="11.5" type="Pig" />
+                <DrawEntity x="11.5" y="4" z="6.5" type="Pig" />
                 <DrawBlock x="11" y="4" z="1" type="emerald_block" />
-                <DrawBlock x="6" y="4" z="11" type="log" />
+                <DrawBlock x="11" y="4" z="11" type="log" />
             </DrawingDecorator>
 
             <ServerQuitFromTimeUp timeLimitMs="30000" />
@@ -81,8 +81,8 @@
             <RewardForSendingCommand reward="-0.01" />
 
             <VideoProducer want_depth="false">
-                <Width>400</Width>
-                <Height>300</Height>
+                <Width>160</Width>
+                <Height>120</Height>
             </VideoProducer>
         </AgentHandlers>
     </AgentSection>
