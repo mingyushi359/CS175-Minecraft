@@ -33,7 +33,7 @@ class Task(BaseTask):
         super().__init__()
         self.stuck_movement_counter = 0
 
-    def reset(self):
+    def reset(self, instruction=None, eval_mode=False):
         self.stuck_movement_counter = 0
 
     def build_state(self, info_dict):
