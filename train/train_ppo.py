@@ -12,7 +12,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback, CallbackList
 from stable_baselines3.common.monitor import Monitor
 
 def load_task_module(task_py):
@@ -37,6 +37,17 @@ def build_state(info_dict, task_module=None):
     
     raise ValueError("Need to define build_state() in task class")
 
+class PlotCallback(BaseCallback):
+    # save plots periodically during PPO training
+    def __init__(self, log_dir, save_freq=2000):
+        super().__init__()
+        self.log_dir = Path(log_dir)
+        self.save_freq = save_freq
+
+    def _on_step(self):
+        if self.num_timesteps % self.save_freq == 0:
+            utility.save_monitor_plots(self.log_dir)
+        return True
 
 class MalmoStructuredEnv(gym.Env):
     # Malmo env wrapper
@@ -240,13 +251,20 @@ if __name__ == '__main__':
         )
 
         checkpoint_callback = CheckpointCallback(
-            save_freq=5000,
+            save_freq=2500,
             save_path=args.model_path,
             name_prefix="ppo"
         )
 
+        plot_callback = PlotCallback(
+            log_dir=log_dir,
+            save_freq=2000,
+        )
+
+        callback = CallbackList([checkpoint_callback, plot_callback])
+
         try:
-            model.learn(total_timesteps=args.total_timesteps, callback=checkpoint_callback)
+            model.learn(total_timesteps=args.total_timesteps, callback=callback)
             model.save(Path(args.model_path) / "ppo_final.zip")
             print(f"Saved PPO model to {args.model_path}/ppo_final.zip")
         finally:
