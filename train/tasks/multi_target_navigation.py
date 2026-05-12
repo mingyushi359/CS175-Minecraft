@@ -1,5 +1,6 @@
 import random
 import torch
+from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModel
 from tasks.base_task import BaseTask
 
@@ -12,24 +13,26 @@ class Task(BaseTask):
     INSTRUCTION_GROUPS = {
         "pig": [
             "go to the pig",
-            # "find the pig",
-            # "chase the pig",
+            "find the pig",
+            "chase the pig",
         ],
         "emerald": [
             "go to the emerald",
-            # "find the emerald",
-            # "find the green block",
+            "find the emerald",
+            "find the green block",
         ],
         "log": [
             "go to the log",
-            # "find the wood",
-            # "find the wooden block",
+            "find the wood",
+            "find the wooden block",
         ],
     }
 
-    # bert model
-    TEXT_MODEL_NAME = "prajjwal1/bert-tiny"
-    TEXT_EMBED_DIM = 128
+    # sentence transformers
+    TEXT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+    TEXT_MODEL_DIM = 384
+    TEXT_OUT_DIM = 64
+    STATE_DIM = 18  # state dim produced from your build_state, excluding text dim
 
     # ObservationFromGrid, same as the one in xml
     GRID_MIN = {"x": -12, "y": -1, "z": -12}
@@ -60,11 +63,9 @@ class Task(BaseTask):
         self.stuck_movement_counter = 0
         self.current_instruction = None
         self.current_target = None
-        # init bert model
-        self.tokenizer = AutoTokenizer.from_pretrained(self.TEXT_MODEL_NAME)
-        self.text_model = AutoModel.from_pretrained(self.TEXT_MODEL_NAME)
-        self.text_model.eval()
-        self.current_instruction_embedding = [0.0] * self.TEXT_EMBED_DIM
+        self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
+        self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
+        self.embedding_cache = {}
 
     def reset(self, instruction=None, eval_mode=False):
         self.stuck_movement_counter = 0
@@ -79,25 +80,13 @@ class Task(BaseTask):
         self.current_instruction_embedding = self.encode_instruction(self.current_instruction)
 
     def encode_instruction(self, text):
-        # encode isntruction using bert text model
-        with torch.no_grad():
-            tokens = self.tokenizer(
-                text,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=16
-            )
-
-            output = self.text_model(**tokens)
-
-            # CLS token embedding: shape [hidden_size]
-            embedding = output.last_hidden_state[0, 0]
-
-            # normalize so PPO does not receive huge text values
-            embedding = embedding / (embedding.norm() + 1e-8)
-
-            return embedding.cpu().numpy().astype("float32").tolist()
+        # sentence transformer
+        if text in self.embedding_cache:
+            embedding = self.embedding_cache[text]
+        else:  # cache embeddings
+            embedding = self.text_model.encode(text, normalize_embeddings=True).astype("float32")
+            self.embedding_cache[text] = embedding
+        return embedding.tolist()
 
     def parse_target(self, instruction):
         # manually parse instruction for the purpose of calculating eval reward
@@ -137,7 +126,7 @@ class Task(BaseTask):
             else:
                 target_features.extend([0.0, 0.0, 0.0, 0.0, 0.0])
 
-        return agent_features + target_features + self.current_instruction_embedding + [float(self.TASK_ID)]
+        return agent_features + target_features + [float(self.TASK_ID)] + self.current_instruction_embedding
 
     def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
         # additional reward logic

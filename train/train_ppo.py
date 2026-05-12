@@ -14,6 +14,9 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback, CallbackList
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+import torch
+import torch.nn as nn
 
 def load_task_module(task_py):
     # loads the task specific module
@@ -36,6 +39,29 @@ def build_state(info_dict, task_module=None):
         return np.array(state, dtype=np.float32)
     
     raise ValueError("Need to define build_state() in task class")
+
+class StateTextFeatureExtractor(BaseFeaturesExtractor):
+    # custom feature extrator that processes texts separately before PPO
+    def __init__(self, observation_space, state_dim=18, text_dim=384, text_out_dim=16):
+        super().__init__(observation_space, features_dim=state_dim + text_out_dim)
+
+        self.state_dim = state_dim
+        self.text_dim = text_dim
+
+        self.text_proj = nn.Sequential(
+            nn.Linear(text_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, text_out_dim),
+            nn.ReLU()
+        )
+
+    def forward(self, observations):
+        state = observations[:, :self.state_dim]
+        text = observations[:, self.state_dim:self.state_dim + self.text_dim]
+
+        text_features = self.text_proj(text)
+
+        return torch.cat([state, text_features], dim=1)
 
 class PlotCallback(BaseCallback):
     # save plots periodically during PPO training
@@ -180,7 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--task-py', type=str, default=None, help='optional Python task reward file')
     parser.add_argument('--record', action='store_true', help='record videos during evaluation')
     parser.add_argument('--instruction', type=str, default=None, help='text instruction for eval')
-
+    parser.add_argument('--projection', action='store_true', help='enable the projection layer for multi-target instruction training, else defaults to raw etxt embedding concact')
 
     args = parser.parse_args()
     if args.server2 is None:
@@ -191,8 +217,9 @@ if __name__ == '__main__':
 
     if args.eval:
         model = PPO.load(args.model_path, env=env, device="cpu")
-        record_dir = Path(args.model_path).parent / "ppo_eval_records"
-        record_dir.mkdir(exist_ok=True)
+        if args.record:
+            record_dir = Path(args.model_path).parent / "ppo_eval_records"
+            record_dir.mkdir(exist_ok=True)
 
         for i in range(args.episodes):
             obs, info = env.reset()
@@ -220,7 +247,7 @@ if __name__ == '__main__':
                 if env.last_frame is not None and env.last_frame.size != 0:
                     frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
 
-                time.sleep(0.25)
+                # time.sleep(0.15)
 
             if args.record and frames:
                 record_path = record_dir / f"episode_{i}_reward_{episode_reward:.2f}.gif"
@@ -235,6 +262,23 @@ if __name__ == '__main__':
         log_dir = Path(args.model_path)
         env = Monitor(env, filename=str(log_dir / "monitor.csv"))  # Monitor warpper for logging rewards
 
+        policy_kwargs=dict(  # larger PPO network
+            net_arch=dict(pi=[256, 256], vf=[256, 256])
+        )
+
+        if args.projection:  # additional projection layer for text
+            policy_kwargs["features_extractor_class"] = StateTextFeatureExtractor
+            policy_kwargs["features_extractor_kwargs"] = dict(
+                state_dim=task_module.STATE_DIM,
+                text_dim=task_module.TEXT_MODEL_DIM,
+                text_out_dim=task_module.TEXT_OUT_DIM,
+            )
+            print(f"Projection layer - " \
+                  f"state_dim: {task_module.STATE_DIM}, " \
+                  f"text_dim: {task_module.TEXT_MODEL_DIM}, " \
+                  f"text_out_dim: {task_module.TEXT_OUT_DIM}"
+                  )
+
         model = PPO(
             "MlpPolicy",
             env,
@@ -244,9 +288,7 @@ if __name__ == '__main__':
             batch_size=64,
             gamma=0.99,
             ent_coef=0.01,
-            policy_kwargs=dict(
-                net_arch=dict(pi=[256, 256], vf=[256, 256])
-            ),
+            policy_kwargs=policy_kwargs,
             device="cpu",
         )
 
