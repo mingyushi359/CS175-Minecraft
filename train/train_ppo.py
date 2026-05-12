@@ -247,7 +247,7 @@ if __name__ == '__main__':
                 if env.last_frame is not None and env.last_frame.size != 0:
                     frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
 
-                # time.sleep(0.15)
+                # time.sleep(0.15)  # delay in eval might cause weird actions due to delayed state
 
             if args.record and frames:
                 record_path = record_dir / f"episode_{i}_reward_{episode_reward:.2f}.gif"

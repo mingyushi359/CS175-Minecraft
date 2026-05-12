@@ -32,7 +32,7 @@ class Task(BaseTask):
     TEXT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     TEXT_MODEL_DIM = 384
     TEXT_OUT_DIM = 64
-    STATE_DIM = 18  # state dim produced from your build_state, excluding text dim
+    STATE_DIM = 22  # state dim produced from your build_state, excluding text dim
 
     # ObservationFromGrid, same as the one in xml
     GRID_MIN = {"x": -12, "y": -1, "z": -12}
@@ -126,7 +126,19 @@ class Task(BaseTask):
             else:
                 target_features.extend([0.0, 0.0, 0.0, 0.0, 0.0])
 
-        return agent_features + target_features + [float(self.TASK_ID)] + self.current_instruction_embedding
+        # direct obstacle relative to the camera angle
+        fx, fz = self.yaw_to_direction(yaw)
+        lx, lz = fz, -fx
+        rx, rz = -fz, fx
+
+        front = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)))
+        back = float(self.is_block(self.get_board_block(info_dict, -fx, 0, -fz)))
+        left = float(self.is_block(self.get_board_block(info_dict, lx, 0, lz)))
+        right = float(self.is_block(self.get_board_block(info_dict, rx, 0, rz)))
+
+        obstacle_features = [front, back, left, right]
+
+        return agent_features + target_features + obstacle_features + [float(self.TASK_ID)] + self.current_instruction_embedding
 
     def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
         # additional reward logic

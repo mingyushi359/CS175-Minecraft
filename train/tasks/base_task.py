@@ -15,6 +15,27 @@ class BaseTask:
         if GRID_MAX:
             self.GRID_MAX = GRID_MAX
 
+    def get_board_block(self, info_dict, dx, dy, dz):
+        # get block name from board based on relative position
+        board = info_dict.get("board", [])
+        if not board:
+            return None
+        
+        x_count = self.GRID_MAX["x"] - self.GRID_MIN["x"] + 1
+        y_count = self.GRID_MAX["y"] - self.GRID_MIN["y"] + 1
+        z_count = self.GRID_MAX["z"] - self.GRID_MIN["z"] + 1
+
+        board_3d = np.array(board, dtype=object).reshape(y_count, z_count, x_count)
+
+        x = dx - self.GRID_MIN["x"]
+        y = dy - self.GRID_MIN["y"]
+        z = dz - self.GRID_MIN["z"]
+
+        if x < 0 or x >= x_count or y < 0 or y >= y_count or z < 0 or z >= z_count:
+            return None
+
+        return board_3d[y, z, x]
+    
     def find_nearest_entity(self, info_dict, entity_name: str):
         # find the nearest target entity from info_dict given state
         if not info_dict:
@@ -92,6 +113,23 @@ class BaseTask:
                     "yaw_error": yaw_error,
                     }
         return best
+    
+    def yaw_to_direction(self, yaw):
+        # convert yaw to nearest cardinal direction.
+        yaw = yaw % 360
+
+        # direction on (x, z), plane
+        if 225 <= yaw < 315:
+            return (1, 0)      # +x
+        elif 315 <= yaw or yaw < 45:
+            return (0, 1)      # +z
+        elif 45 <= yaw < 135:
+            return (-1, 0)     # -x
+        else:
+            return (0, -1)     # -z
+    
+    def is_block(self, block_name):
+        return block_name not in ["air", "water"]
 
     def yaw_error_to_target(self, agent_yaw, dx, dz):
         target_yaw = math.degrees(math.atan2(-dx, dz))

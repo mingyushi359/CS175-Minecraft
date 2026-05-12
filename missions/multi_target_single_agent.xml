@@ -40,8 +40,8 @@
 
                 <!-- Multi-task targets inside the arena. -->
                 <DrawEntity x="11.5" y="4" z="6.5" type="Pig" />
-                <DrawBlock x="11" y="4" z="1" type="emerald_block" />
-                <DrawBlock x="11" y="4" z="11" type="log" />
+                <DrawBlock x="10" y="4" z="1" type="emerald_block" />
+                <DrawBlock x="10" y="4" z="11" type="log" />
             </DrawingDecorator>
 
             <ServerQuitFromTimeUp timeLimitMs="30000" />
