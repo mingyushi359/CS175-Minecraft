@@ -27,7 +27,7 @@ Make sure `java -version` shows the correct version in `cmd`
 ### 2. Install dependencies
 
 ```bash
-pip install malmoenv gymnasium numpy pillow lxml stable-baselines3 imageio pillow
+pip install malmoenv gymnasium numpy pillow lxml stable-baselines3 imageio matplotlib pandas transformers sentence-transformers
 ```
 You might need to install GPU-compatible versions of `torch` if you wanna use GPU for training, current default uses CPU
 
@@ -61,23 +61,65 @@ The original sample scripts and missions are located in `MalmoPlatform/MalmoEnv/
 
 
 ## Training PPO Agent
+### Single Target
 
 ```bash
 python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
 ```
+`--mission` is the mission.xml file
 
-`--task` defines the specific file that contains the additional reward function for the task (e.g., `train/tasks/mob_chase.py`)
+`--episodemaxsteps` is the max steps the agent can take per episode
 
-Training (avg stpes and reward) usually starts to degrade before 50k timesteps, so just stop early if that happens, no need to run to 100k timesteps
+`--timesteps` is the total number of steps the agent will take during the entire training. Currently set to 100000 as a safe upperbound. Single target tasks like `mob_chase` will usually require less thank 50k timesteps to train, so just end training early as needed
+
+`--model-path` is the path where the trained models and logs will be saved
+
+`--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` as an example
+
+
+### Multi-Target
+```bash
+python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
+```
+
+The training command for multi-target tasks is the mostly same. Just change the `--task-py` and `--mission` accordingly
+
+`--projection` is an optional argument for enabling the projection layer that projects the text instruction through trainable MLP instead of passing the raw encoded embedding into the PPO network
+
+Note that current multi-target setup might requires more timesteps. It's recommended to set `--total-timesteps` to 150000 for tasks like `multi_target_navigation.py` just in case it takes more steps to train, but you can always end early as needed
 
 ## Evaluating PPO Agent
+### Single Target
 
 ```bash
-python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --task-py train/tasks/mob_chase.py --eval --model-path ppo_logs/out1/ppo_final.zip --episodes 5 --episodemaxsteps 100 --task-py train/tasks/mob_chase.py
+python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/mob_chase.py --model-path ppo_logs/out1/ppo_final.zip --task-py train/tasks/mob_chase.py --eval --episodes 5
 ```
-In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation, which perform better in some cases
+
+`--mission`, `--task-py`, and `--episodemaxsteps 100` are the same as training
+
+`--model-path` need to be exact path to a saved checkpoint (.zip)
+
+`--eval` indicates evluation instead of training
+
+`--episodes` is the number of episodes to run for evluation
+
+`--record` optionally records the evluation and saves as GIF
+
+In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation. Not ideal, but performs better is some cases
+
+### Multi-Target
+
+```bash
+python train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_navigation.py --model-path ppo_logs/out13/ppo_65000_steps.zip --projection --eval --episodes 5 --instruction "go to the pig" 
+```
+Mostly the same as single target eval, except:
+
+`--projection` need to be consistent with training
+
+`--instruction` need to pass in the text instruction for multi-target evaluation
 
 ## Example Recording
+### mob_chase
 <img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
 <img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
 
