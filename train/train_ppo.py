@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
             if args.record and frames:
                 record_path = record_dir / f"episode_{i}_reward_{episode_reward:.2f}.gif"
-                imageio.mimsave(record_path, frames, fps=4)
+                imageio.mimsave(record_path, frames, fps=8, loop=0)
 
             print(
                 f"EVAL episode={i}, steps={steps}, "
