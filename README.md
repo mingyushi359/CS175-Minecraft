@@ -88,6 +88,8 @@ The training command for multi-target tasks is the mostly same. Just change the 
 
 Note that current multi-target setup might requires more timesteps. It's recommended to set `--total-timesteps` to 150000 for tasks like `multi_target_navigation.py` just in case it takes more steps to train, but you can always end early as needed
 
+---
+
 ## Evaluating PPO Agent
 ### Single Target
 
@@ -122,6 +124,19 @@ Mostly the same as single target eval, except:
 ### mob_chase
 <img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
 <img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
+
+### multi-target_navigation
+|"go to the pig"|"go to the log"|"go to the emerald"|
+| -------- | -------- | -------- |
+|<img width="160" height="120" alt="episode_0_reward_48 05" src="https://github.com/user-attachments/assets/b13984b9-0120-4780-ba5a-03c337b70104" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="https://github.com/user-attachments/assets/a3f11098-c3dc-4157-89d9-142b889c8799" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="https://github.com/user-attachments/assets/51485fcb-8668-44c0-9889-7afb225e43d3" />|
+
+## Example learning plot
+### multi-target_navigation
+
+<img width="1500" height="750" alt="reward_curve" src="https://github.com/user-attachments/assets/8dbd5fe0-482e-4537-a261-0c19e195bdca" />
+<img width="1500" height="750" alt="steps_curve" src="https://github.com/user-attachments/assets/3b2fc9f8-9191-44db-9f8f-59e6736a1284" />
+
+This run was from the "Add obstacle states" commit. The best model appears to be the 57500_steps checkpoint, and the learning started to drift away after that
 
 ---
 
