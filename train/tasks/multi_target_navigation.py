@@ -10,22 +10,16 @@ class Task(BaseTask):
 
     CUSTOM_ACTIONS = ["move 1", "turn 1", "turn -1", "strafe 1", "strafe -1"]
 
-    INSTRUCTION_GROUPS = {
-        "pig": [
-            "go to the pig",
-            "find the pig",
-            "chase the pig",
-        ],
-        "emerald": [
-            "go to the emerald",
-            "find the emerald",
-            "find the green block",
-        ],
-        "log": [
-            "go to the log",
-            "find the wood",
-            "find the wooden block",
-        ],
+    INSTRUCTION_TEMPLATE = [
+        "go to the {}",
+        "find the {}",
+        "move to the {}",
+    ]
+
+    INSTRUCTION_TARGET_ALIASES = {
+        "pig": ["pig", "animal"],
+        "emerald": ["emerald", "green block"],
+        "log": ["log", "wood", "wooden block"],
     }
 
     # sentence transformers
@@ -72,7 +66,9 @@ class Task(BaseTask):
 
         if instruction is None:  # randomly samples an instruction during trianing
             self.current_target = random.choice(self.TARGETS)
-            self.current_instruction = random.choice(self.INSTRUCTION_GROUPS[self.current_target])
+            template = random.choice(self.INSTRUCTION_TEMPLATE)
+            target_alias = random.choice(self.INSTRUCTION_TARGET_ALIASES[self.current_target])
+            self.current_instruction = template.format(target_alias)
         else:  # specify instruction during eval
             self.current_instruction = instruction
             self.current_target = self.parse_target(instruction)
