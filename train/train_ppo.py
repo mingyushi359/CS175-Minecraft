@@ -84,6 +84,7 @@ class MalmoStructuredEnv(gym.Env):
         self.task_id = task_module.TASK_ID if task_module is not None else 0
         self.steps = 0
         self.prev_info_dict = None
+        self.prev_state = None
         self.last_frame = None
 
         xml = Path(args.mission).read_text()
@@ -136,6 +137,7 @@ class MalmoStructuredEnv(gym.Env):
         self.env.reset()
         self.steps = 0
         self.prev_info_dict = None
+        self.prev_state = None
         if self.task_module:
             self.task_module.reset(instruction=self.args.instruction, eval_mode=self.args.eval)
 
@@ -149,6 +151,8 @@ class MalmoStructuredEnv(gym.Env):
             self.prev_info_dict = info_dict
         else:
             state = np.zeros(self.observation_space.shape, dtype=np.float32)
+
+        self.prev_state = state
         return state, {}
     
     def step(self, action):
@@ -161,21 +165,25 @@ class MalmoStructuredEnv(gym.Env):
         reward = float(reward)
         task_done = False
 
-        if self.task_module:
-            reward, task_done, metrics = self.task_module.shape_reward(
-                raw_reward=reward,
-                prev_info=self.prev_info_dict,
-                curr_info=info_dict,
-                action=int(action),
-                step=self.steps,
-            )
-
         if info_dict:
-            state = build_state(info_dict, task_module=self.task_module)
-        else:
-            state = np.zeros(self.observation_space.shape, dtype=np.float32)
+            if self.task_module:
+                reward, task_done, metrics = self.task_module.shape_reward(
+                    raw_reward=reward,
+                    prev_info=self.prev_info_dict,
+                    curr_info=info_dict,
+                    action=int(action),
+                    step=self.steps,
+                )
 
-        self.prev_info_dict = info_dict if info_dict else self.prev_info_dict
+            state = build_state(info_dict, task_module=self.task_module)
+
+            self.prev_info_dict = info_dict
+            self.prev_state = state
+        else:  # when info_dict is empty
+            if self.prev_state is not None:  # reuse previous state if available
+                state = self.prev_state
+            else:  # else return zero
+                state = np.zeros(self.observation_space.shape, dtype=np.float32)
 
         terminated = bool(done or task_done)
         truncated = bool(self.args.episodemaxsteps > 0 and self.steps >= self.args.episodemaxsteps)
