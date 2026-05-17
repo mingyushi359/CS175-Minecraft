@@ -4,10 +4,7 @@ from tasks.base_task import BaseTask
 
 class Task(BaseTask):
     TASK_ID = 3
-    TARGETS = ["diamond_ore",
-            #    "log",
-            #    "sand"
-               ]
+    TARGETS = ["diamond_ore","log","sand"]
 
     CUSTOM_ACTIONS = [
         "move 1",
@@ -22,18 +19,14 @@ class Task(BaseTask):
     ]
     INSTRUCTION_TEMPLATE = [
         "break the {}",
-        # "mine the {}",
-        # "destroy the {}",
+        "mine the {}",
+        "destroy the {}",
     ]
 
     INSTRUCTION_TARGET_ALIASES = {
-        "diamond_ore": [
-            "diamond ore", 
-            # "diamond block", 
-            # "ore"
-            ],
-        # "log": ["log", "wood", "wooden block"],
-        # "sand": ["sand"],
+        "diamond_ore": ["diamond ore", "diamond block", "ore"],
+        "log": ["log", "wood", "wooden block"],
+        "sand": ["sand"],
     }
 
     REQUIRED_TOOL_ACTION = {
@@ -61,11 +54,11 @@ class Task(BaseTask):
     # custom rewards
     REACH_DISTANCE = 2.0
     REACH_REWARD = 80.0
-    DISTANCE_PROGRESS_SCALE = 3.0
+    DISTANCE_PROGRESS_SCALE = 1.0
     LOOK_PROGRESS_SCALE = 0.03
 
-    MAX_ATTACK_RANGE = 4.0
-    MIN_ATTACK_RANGE = 1.5
+    MAX_ATTACK_RANGE = 3.3
+    MIN_ATTACK_RANGE = 0.0
 
     GOOD_FACING_DEGREES = 45.0
     OK_FACING_DEGREES = 60.0
@@ -162,7 +155,10 @@ class Task(BaseTask):
         lx, lz = fz, -fx
         rx, rz = -fz, fx
 
-        front = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)))
+        front_blocked = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)))
+        pit_ahead = self.pit_ahead(info_dict)  # pit also represent obstacle ahead
+
+        front = float(front_blocked or pit_ahead)
         back = float(self.is_block(self.get_board_block(info_dict, -fx, 0, -fz)))
         left = float(self.is_block(self.get_board_block(info_dict, lx, 0, lz)))
         right = float(self.is_block(self.get_board_block(info_dict, rx, 0, rz)))
@@ -184,14 +180,17 @@ class Task(BaseTask):
         done = False
         metrics = {}  # saving agent stats for debug purposes, not used
 
-        if not curr_info:  # skip if info_dict is empty
+        if not curr_info or not prev_info:  # skip if info_dict is empty
             return reward, done, metrics 
+        
+        if float(curr_info.get("YPos", 4.0)) < 3.5:
+            # terminate if y level changes (fall into the pit)
+            reward -= 10.0
+            done = True
+            return reward, done, metrics
 
         prev_target = self.find_nearest_block(prev_info, self.current_target)
         curr_target = self.find_nearest_block(curr_info, self.current_target)
-
-        if prev_target is None and curr_target is None:
-            return reward, done, metrics
 
         if action in self.TOOL_ACTIONS:
             # give penalty for selecting the wrong tool
@@ -205,93 +204,75 @@ class Task(BaseTask):
 
         correct_tool = self.current_tool_action == self.REQUIRED_TOOL_ACTION[self.current_target]
 
-        # target_broken = (prev_target is not None and curr_target is None and self.last_action_was_attack)
-        # if target_broken:
-        #     # correct win condition (correct tool + correct block breaking)
-        #     if correct_tool:
-        #         reward += self.REACH_REWARD
-        #     else:  # false win condition (incorrect tool + correct block breaking)
-        #         reward += 5.0
-
-        #     done = True
-        #     return reward, done, metrics
-        
         target_item = self.TARGET_DROP_ITEM[self.current_target]
         if self.inventory_contains(curr_info, target_item):
             # alternative win condition of collecting target drop item
             if correct_tool:
                 reward += self.REACH_REWARD
             else:
-                reward += 5.0
+                reward += 20.0
 
             done = True
             return reward, done, metrics
 
-        if curr_target is None:
+        if curr_target is None or prev_target is None:
             return reward, done, metrics
         
-        distance = curr_target["distance"]
-        yaw_error = curr_target["yaw_error"]
+        prev_distance = prev_target["distance"]
+        in_attack_range = self.MIN_ATTACK_RANGE < prev_distance <= self.MAX_ATTACK_RANGE
 
-        in_attack_range = self.MIN_ATTACK_RANGE < distance <= self.MAX_ATTACK_RANGE
-        ready_to_attack = correct_tool and in_attack_range and yaw_error <= self.GOOD_FACING_DEGREES
-        
-        # if correct_tool and distance <= self.MAX_ATTACK_RANGE:
-        #     # reward for holding the correct tool near target
-        #     reward += 0.05
-
-        if ready_to_attack:
-            # reward for holding the correct tool near and facing the target
-            reward += 0.05
-
+        target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
         if action == self.ATTACK_ACTION:
             # reward for attacking while near and facing the target block
-            if ready_to_attack:
-                reward += 0.1
+            if in_attack_range:
+                reward += 1.0
+                if target_ahead:
+                    reward += 1.0
+                if correct_tool:
+                    reward += 1.0
             else:
-                reward -= 0.5
+                reward -= 1.0
+
+        if action == self.FORWARD_ACTION and self.pit_ahead(prev_info):
+            # penalty for walking into the pit
+            reward -= 1.0
 
         # navigation rewards
-        if action == self.FORWARD_ACTION and distance < self.MIN_ATTACK_RANGE:
-            # penalty for moving to close to the target
-            reward -= 0.2
-
         if correct_tool and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
             # extra reward for facing the target
             reward += self.GOOD_FACING_REWARD
-        
 
-        if action == self.FORWARD_ACTION and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+        if action == self.FORWARD_ACTION and prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES and not in_attack_range:
             # reward for moving forward when facing the target
             reward += 0.08
 
-        if action in self.TURN_ACTIONS and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+
+        distance_progress = prev_target["distance"] - curr_target["distance"]
+        look_progress = prev_target["yaw_error"] - curr_target["yaw_error"]
+
+        # reward += self.DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
+        reward += self.LOOK_PROGRESS_SCALE * self.clamp(look_progress, -10.0, 10.0)
+
+        if curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # give distance reward only when roughly facing the target
+            reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
+
+        if action in self.MOVEMENT_ACTIONS and distance_progress <= 0.01:
+            # penalty for not making no progress when moving forward (like moving against a wall)
+            reward += self.NO_PROGRESS_PENALTY
+            self.stuck_movement_counter += 1
+            if self.stuck_movement_counter >= 5:
+                reward -= 0.40
+        else:
+            self.stuck_movement_counter = 0
+
+        if action in self.TURN_ACTIONS and prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
             # penalty for turning when already facing the target
             reward += self.UNNECESSARY_TURN_PENALTY
 
-        if action == self.FORWARD_ACTION and curr_target["yaw_error"] > self.BAD_FACING_DEGREES:
+        if action == self.FORWARD_ACTION and prev_target["yaw_error"] > self.BAD_FACING_DEGREES:
             # penalty for moving forward when not facing the target
             reward += self.BAD_FORWARD_PENALTY
-
-        if prev_target is not None:
-            distance_progress = prev_target["distance"] - curr_target["distance"]
-            look_progress = prev_target["yaw_error"] - curr_target["yaw_error"]
-
-            # reward += self.DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
-            reward += self.LOOK_PROGRESS_SCALE * self.clamp(look_progress, -10.0, 10.0)
-
-            if curr_target["yaw_error"] <= self.OK_FACING_DEGREES and curr_target["distance"] > self.MIN_ATTACK_RANGE:
-                # give distance reward only when roughly facing the target
-                reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
-
-            if action in self.MOVEMENT_ACTIONS and distance_progress <= 0.01:
-                # penalty for not making no progress when moving forward (like moving against a wall)
-                reward += self.NO_PROGRESS_PENALTY
-                self.stuck_movement_counter += 1
-                if self.stuck_movement_counter >= 5:
-                    reward -= 0.40
-            else:
-                self.stuck_movement_counter = 0
 
         return reward, done, metrics
 
@@ -302,3 +283,24 @@ class Task(BaseTask):
             if item == item_name:
                 return True
         return False 
+    
+    def block_ahead_matches_target(self, info_dict, max_dist=3):
+        # check if target block is in front
+        yaw = float(info_dict.get("Yaw", 0))
+        fx, fz = self.yaw_to_direction(yaw)
+
+        for d in range(1, max_dist + 1):
+            block = self.get_board_block(info_dict, fx * d, 0, fz * d)
+            if block == self.current_target:
+                return True
+
+        return False 
+    
+    def pit_ahead(self, info_dict):
+        # check if there's a pit ahead
+        yaw = float(info_dict.get("Yaw", 0))
+        fx, fz = self.yaw_to_direction(yaw)
+
+        below_front = self.get_board_block(info_dict, fx, -1, fz)
+
+        return below_front == "air"

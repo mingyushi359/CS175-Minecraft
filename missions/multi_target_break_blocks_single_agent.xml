@@ -36,13 +36,13 @@
 
                 <!-- Tool-task target blocks. -->
                 <!-- Pickaxe target. -->
-                <DrawBlock x="10" y="4" z="3" type="diamond_ore" />
+                <DrawCuboid x1="11" y1="4" z1="3" x2="11" y2="4" z2="3" type="diamond_ore" />
 
                 <!-- Axe target. -->
-                <DrawBlock x="10" y="4" z="6" type="log" />
+                <DrawCuboid x1="11" y1="4" z1="6" x2="11" y2="4" z2="6" type="log" />
 
                 <!-- Shovel target. -->
-                <DrawBlock x="10" y="4" z="9" type="sand" />
+                <DrawCuboid x1="11" y1="4" z1="9" x2="11" y2="4" z2="9" type="sand" />
 
                 <!-- Far visual landmarks outside observation range. -->
                 <DrawCuboid x1="-30" y1="4" z1="6" x2="-30" y2="10" z2="6" type="diamond_block" />
@@ -58,7 +58,7 @@
         <Name>Agent0</Name>
 
         <AgentStart>
-            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="21" />
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="27" />
 
             <Inventory>
                 <InventoryItem slot="0" type="diamond_pickaxe" quantity="1" />
