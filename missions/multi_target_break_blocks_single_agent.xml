@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Mission xmlns="http://ProjectMalmo.microsoft.com"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <About>
+        <Summary>Instruction-conditioned tool selection and block breaking</Summary>
+    </About>
+
+    <ModSettings>
+        <MsPerTick>20</MsPerTick>
+    </ModSettings>
+
+    <ServerSection>
+        <ServerInitialConditions>
+            <Time>
+                <StartTime>1000</StartTime>
+                <AllowPassageOfTime>false</AllowPassageOfTime>
+            </Time>
+            <Weather>clear</Weather>
+            <AllowSpawning>false</AllowSpawning>
+        </ServerInitialConditions>
+
+        <ServerHandlers>
+            <FlatWorldGenerator generatorString="3;7,2x3,2;1;" forceReset="true" />
+
+            <DrawingDecorator>
+                <!-- Clear and rebuild arena floor. -->
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="8" z2="12" type="air" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
+
+                <!-- Fenced arena. -->
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="5" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="5" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="5" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="5" z2="12" type="spruce_fence" />
+
+                <!-- Tool-task target blocks. -->
+                <!-- Pickaxe target. -->
+                <DrawBlock x="10" y="4" z="3" type="diamond_ore" />
+
+                <!-- Axe target. -->
+                <DrawBlock x="10" y="4" z="6" type="log" />
+
+                <!-- Shovel target. -->
+                <DrawBlock x="10" y="4" z="9" type="sand" />
+
+                <!-- Far visual landmarks outside observation range. -->
+                <DrawCuboid x1="-30" y1="4" z1="6" x2="-30" y2="10" z2="6" type="diamond_block" />
+                <DrawCuboid x1="42" y1="4" z1="6" x2="42" y2="10" z2="6" type="gold_block" />
+            </DrawingDecorator>
+
+            <ServerQuitFromTimeUp timeLimitMs="30000" />
+            <ServerQuitWhenAnyAgentFinishes />
+        </ServerHandlers>
+    </ServerSection>
+
+    <AgentSection mode="Survival">
+        <Name>Agent0</Name>
+
+        <AgentStart>
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="21" />
+
+            <Inventory>
+                <InventoryItem slot="0" type="diamond_pickaxe" quantity="1" />
+                <InventoryItem slot="1" type="diamond_axe" quantity="1" />
+                <InventoryItem slot="2" type="diamond_shovel" quantity="1" />
+            </Inventory>
+        </AgentStart>
+
+        <AgentHandlers>
+            <DiscreteMovementCommands>
+                <ModifierList type="allow-list">
+                    <command>move</command>
+                    <command>turn</command>
+                    <command>strafe</command>
+                    <command>attack</command>
+                </ModifierList>
+            </DiscreteMovementCommands>
+
+            <InventoryCommands>
+                <ModifierList type="allow-list">
+                    <command>hotbar.1</command>
+                    <command>hotbar.2</command>
+                    <command>hotbar.3</command>
+                </ModifierList>
+            </InventoryCommands>
+
+            <ObservationFromGrid>
+                <Grid absoluteCoords="false" name="board">
+                    <min x="-12" y="-1" z="-12" />
+                    <max x="12" y="1" z="12" />
+                </Grid>
+            </ObservationFromGrid>
+
+            <ObservationFromFullInventory />
+            <ObservationFromHotBar />
+            <ObservationFromFullStats />
+
+            <RewardForSendingCommand reward="-0.01" />
+
+            <!-- Optional sparse XML rewards. You can remove these if all reward is handled in Python. -->
+            <!-- <RewardForCollectingItem>
+                <Item type="diamond" reward="20" />
+                <Item type="log" reward="20" />
+                <Item type="gravel" reward="20" />
+            </RewardForCollectingItem> -->
+
+            <VideoProducer want_depth="false">
+                <Width>400</Width>
+                <Height>300</Height>
+            </VideoProducer>
+        </AgentHandlers>
+    </AgentSection>
+</Mission>

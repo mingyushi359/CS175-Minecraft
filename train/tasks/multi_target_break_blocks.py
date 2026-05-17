@@ -1,0 +1,304 @@
+import random
+from sentence_transformers import SentenceTransformer
+from tasks.base_task import BaseTask
+
+class Task(BaseTask):
+    TASK_ID = 3
+    TARGETS = ["diamond_ore",
+            #    "log",
+            #    "sand"
+               ]
+
+    CUSTOM_ACTIONS = [
+        "move 1",
+        "turn 1",
+        "turn -1",
+        "strafe 1",
+        "strafe -1",
+        "hotbar.1 1",  # pickaxe
+        "hotbar.2 1",  # axe
+        "hotbar.3 1",  # shovel
+        "attack 1",
+    ]
+    INSTRUCTION_TEMPLATE = [
+        "break the {}",
+        # "mine the {}",
+        # "destroy the {}",
+    ]
+
+    INSTRUCTION_TARGET_ALIASES = {
+        "diamond_ore": [
+            "diamond ore", 
+            # "diamond block", 
+            # "ore"
+            ],
+        # "log": ["log", "wood", "wooden block"],
+        # "sand": ["sand"],
+    }
+
+    REQUIRED_TOOL_ACTION = {
+        "diamond_ore": 5,  # hotbar.1 / pickaxe
+        "log": 6,          # hotbar.2 / axe
+        "sand": 7,       # hotbar.3 / shovel
+    }
+
+    TARGET_DROP_ITEM = {
+        "diamond_ore": "diamond",
+        "log": "log",
+        "sand": "sand",
+    }
+
+    # sentence transformers
+    TEXT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+    TEXT_MODEL_DIM = 384
+    TEXT_OUT_DIM = 64
+    STATE_DIM = 25  # state dim produced from your build_state, excluding text dim
+
+    # ObservationFromGrid, same as the one in xml
+    GRID_MIN = {"x": -12, "y": -1, "z": -12}
+    GRID_MAX = {"x": 12, "y": 1, "z": 12}
+
+    # custom rewards
+    REACH_DISTANCE = 2.0
+    REACH_REWARD = 80.0
+    DISTANCE_PROGRESS_SCALE = 3.0
+    LOOK_PROGRESS_SCALE = 0.03
+
+    MAX_ATTACK_RANGE = 4.0
+    MIN_ATTACK_RANGE = 1.5
+
+    GOOD_FACING_DEGREES = 45.0
+    OK_FACING_DEGREES = 60.0
+    BAD_FACING_DEGREES = 90.0
+    GOOD_FACING_REWARD = 0.03
+
+    TURN_ACTIONS = [1, 2]  # left, right
+    UNNECESSARY_TURN_PENALTY = -0.08
+
+    FORWARD_ACTION = 0
+    BAD_FORWARD_PENALTY = -0.10
+    NO_PROGRESS_PENALTY = -0.20
+
+    ATTACK_ACTION = 8
+    MOVEMENT_ACTIONS = [0, 3, 4]  # forward, strafe left/right
+    TOOL_ACTIONS = [5, 6, 7]
+
+    def __init__(self):
+        super().__init__()
+        self.stuck_movement_counter = 0
+        self.current_instruction = None
+        self.current_target = None
+        self.current_tool_action = 5
+        self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
+        self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
+        self.select_correct_tool_once = False
+        self.embedding_cache = {}
+
+    def reset(self, instruction=None, eval_mode=False):
+        self.stuck_movement_counter = 0
+        self.current_tool_action = 5
+        self.select_correct_tool_once = False
+
+        if instruction is None:  # randomly samples an instruction during trianing
+            self.current_target = random.choice(self.TARGETS)
+            template = random.choice(self.INSTRUCTION_TEMPLATE)
+            target_alias = random.choice(self.INSTRUCTION_TARGET_ALIASES[self.current_target])
+            self.current_instruction = template.format(target_alias)
+        else:  # specify instruction during eval
+            self.current_instruction = instruction
+            self.current_target = self.parse_target(instruction)
+
+        self.current_instruction_embedding = self.encode_instruction(self.current_instruction)
+
+    def encode_instruction(self, text):
+        # sentence transformer
+        if text in self.embedding_cache:
+            embedding = self.embedding_cache[text]
+        else:  # cache embeddings
+            embedding = self.text_model.encode(text, normalize_embeddings=True).astype("float32")
+            self.embedding_cache[text] = embedding
+        return embedding.tolist()
+
+    def parse_target(self, instruction):
+        # manually parse instruction for the purpose of calculating eval reward
+        text = instruction.lower()
+
+        if "diamond" in text or "ore" in text:
+            return "diamond_ore"
+        if "log" in text or "wood" in text or "wooden" in text:
+            return "log"
+        if "sand" in text :
+            return "sand"
+
+        raise ValueError(f"Unknown instruction: {instruction}")
+
+    def build_state(self, info_dict):
+        # build state for multi target
+
+        # agent camera feature
+        yaw = float(info_dict.get("Yaw", 0))
+        pitch = float(info_dict.get("Pitch", 0))
+        agent_features = [yaw / 180.0, pitch / 90.0]
+
+        diamond_ore = self.find_nearest_block(info_dict, "diamond_ore")
+        log = self.find_nearest_block(info_dict, "log")
+        sand = self.find_nearest_block(info_dict, "sand")
+
+        target_features = []
+        for target in [diamond_ore, log, sand]:
+            if target is not None:
+                target_features.extend([
+                    target["dx"] / 12.0,
+                    target["dy"] / 5.0,
+                    target["dz"] / 12.0,
+                    target["distance"] / 17.0,
+                    target["yaw_error"] / 180.0,
+                ])
+            else:
+                target_features.extend([0.0, 0.0, 0.0, 0.0, 0.0])
+
+        # direct obstacle relative to the camera angle
+        fx, fz = self.yaw_to_direction(yaw)
+        lx, lz = fz, -fx
+        rx, rz = -fz, fx
+
+        front = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)))
+        back = float(self.is_block(self.get_board_block(info_dict, -fx, 0, -fz)))
+        left = float(self.is_block(self.get_board_block(info_dict, lx, 0, lz)))
+        right = float(self.is_block(self.get_board_block(info_dict, rx, 0, rz)))
+
+        obstacle_features = [front, back, left, right]
+
+        tool_features = [
+            1.0 if self.current_tool_action == 5 else 0.0,  # pickaxe
+            1.0 if self.current_tool_action == 6 else 0.0,  # axe
+            1.0 if self.current_tool_action == 7 else 0.0,  # shovel
+        ]
+
+        return agent_features + target_features + obstacle_features + tool_features + [float(self.TASK_ID)] + self.current_instruction_embedding
+
+    def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
+        # additional reward logic
+        reward = float(raw_reward)
+        reward -= 0.05  # global penalty
+        done = False
+        metrics = {}  # saving agent stats for debug purposes, not used
+
+        if not curr_info:  # skip if info_dict is empty
+            return reward, done, metrics 
+
+        prev_target = self.find_nearest_block(prev_info, self.current_target)
+        curr_target = self.find_nearest_block(curr_info, self.current_target)
+
+        if prev_target is None and curr_target is None:
+            return reward, done, metrics
+
+        if action in self.TOOL_ACTIONS:
+            # give penalty for selecting the wrong tool
+            self.current_tool_action = action
+            if action == self.REQUIRED_TOOL_ACTION[self.current_target]:
+                if not self.select_correct_tool_once:
+                    reward += 1.0
+                    self.select_correct_tool_once = True
+            else:
+                reward -= 0.2
+
+        correct_tool = self.current_tool_action == self.REQUIRED_TOOL_ACTION[self.current_target]
+
+        # target_broken = (prev_target is not None and curr_target is None and self.last_action_was_attack)
+        # if target_broken:
+        #     # correct win condition (correct tool + correct block breaking)
+        #     if correct_tool:
+        #         reward += self.REACH_REWARD
+        #     else:  # false win condition (incorrect tool + correct block breaking)
+        #         reward += 5.0
+
+        #     done = True
+        #     return reward, done, metrics
+        
+        target_item = self.TARGET_DROP_ITEM[self.current_target]
+        if self.inventory_contains(curr_info, target_item):
+            # alternative win condition of collecting target drop item
+            if correct_tool:
+                reward += self.REACH_REWARD
+            else:
+                reward += 5.0
+
+            done = True
+            return reward, done, metrics
+
+        if curr_target is None:
+            return reward, done, metrics
+        
+        distance = curr_target["distance"]
+        yaw_error = curr_target["yaw_error"]
+
+        in_attack_range = self.MIN_ATTACK_RANGE < distance <= self.MAX_ATTACK_RANGE
+        ready_to_attack = correct_tool and in_attack_range and yaw_error <= self.GOOD_FACING_DEGREES
+        
+        # if correct_tool and distance <= self.MAX_ATTACK_RANGE:
+        #     # reward for holding the correct tool near target
+        #     reward += 0.05
+
+        if ready_to_attack:
+            # reward for holding the correct tool near and facing the target
+            reward += 0.05
+
+        if action == self.ATTACK_ACTION:
+            # reward for attacking while near and facing the target block
+            if ready_to_attack:
+                reward += 0.1
+            else:
+                reward -= 0.5
+
+        # navigation rewards
+        if action == self.FORWARD_ACTION and distance < self.MIN_ATTACK_RANGE:
+            # penalty for moving to close to the target
+            reward -= 0.2
+
+        if correct_tool and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # extra reward for facing the target
+            reward += self.GOOD_FACING_REWARD
+        
+
+        if action == self.FORWARD_ACTION and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # reward for moving forward when facing the target
+            reward += 0.08
+
+        if action in self.TURN_ACTIONS and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # penalty for turning when already facing the target
+            reward += self.UNNECESSARY_TURN_PENALTY
+
+        if action == self.FORWARD_ACTION and curr_target["yaw_error"] > self.BAD_FACING_DEGREES:
+            # penalty for moving forward when not facing the target
+            reward += self.BAD_FORWARD_PENALTY
+
+        if prev_target is not None:
+            distance_progress = prev_target["distance"] - curr_target["distance"]
+            look_progress = prev_target["yaw_error"] - curr_target["yaw_error"]
+
+            # reward += self.DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
+            reward += self.LOOK_PROGRESS_SCALE * self.clamp(look_progress, -10.0, 10.0)
+
+            if curr_target["yaw_error"] <= self.OK_FACING_DEGREES and curr_target["distance"] > self.MIN_ATTACK_RANGE:
+                # give distance reward only when roughly facing the target
+                reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
+
+            if action in self.MOVEMENT_ACTIONS and distance_progress <= 0.01:
+                # penalty for not making no progress when moving forward (like moving against a wall)
+                reward += self.NO_PROGRESS_PENALTY
+                self.stuck_movement_counter += 1
+                if self.stuck_movement_counter >= 5:
+                    reward -= 0.40
+            else:
+                self.stuck_movement_counter = 0
+
+        return reward, done, metrics
+
+    def inventory_contains(self, info_dict, item_name):
+        # check if inventory contains item
+        for i in range(9):
+            item = info_dict.get(f"InventorySlot_{i}_item", "")
+            if item == item_name:
+                return True
+        return False 
