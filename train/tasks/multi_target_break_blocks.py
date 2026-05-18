@@ -19,13 +19,19 @@ class Task(BaseTask):
     ]
     INSTRUCTION_TEMPLATE = [
         "break the {}",
-        "mine the {}",
-        "destroy the {}",
+        # "mine the {}",
+        # "destroy the {}",
     ]
 
     INSTRUCTION_TARGET_ALIASES = {
-        "diamond_ore": ["diamond ore", "diamond block", "ore"],
-        "log": ["log", "wood", "wooden block"],
+        "diamond_ore": ["diamond ore", 
+                        # "diamond block", 
+                        # "ore"
+                        ],
+        "log": ["log", 
+                # "wood", 
+                # "wooden block"
+                ],
         "sand": ["sand"],
     }
 
@@ -157,13 +163,11 @@ class Task(BaseTask):
         lx, lz = fz, -fx
         rx, rz = -fz, fx
 
-        front_blocked = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)))
-        pit_ahead = self.pit_ahead(info_dict)  # pit also represent obstacle ahead
-
-        front = float(front_blocked or pit_ahead)
-        back = float(self.is_block(self.get_board_block(info_dict, -fx, 0, -fz)))
-        left = float(self.is_block(self.get_board_block(info_dict, lx, 0, lz)))
-        right = float(self.is_block(self.get_board_block(info_dict, rx, 0, rz)))
+        # pit in either direction also represents obstacle
+        front = float(self.is_block(self.get_board_block(info_dict, fx, 0, fz)) or self.pit_in_direction(info_dict, fx, fz))
+        back = float(self.is_block(self.get_board_block(info_dict, -fx, 0, -fz)) or self.pit_in_direction(info_dict, -fx, -fz))
+        left = float(self.is_block(self.get_board_block(info_dict, lx, 0, lz)) or self.pit_in_direction(info_dict, lx, lz))
+        right = float(self.is_block(self.get_board_block(info_dict, rx, 0, rz)) or self.pit_in_direction(info_dict, rx, rz))
 
         obstacle_features = [front, back, left, right]
 
@@ -208,18 +212,26 @@ class Task(BaseTask):
         # prev_distance = prev_target["distance"]
         # in_attack_range = self.MIN_ATTACK_RANGE < prev_distance <= self.MAX_ATTACK_RANGE
 
-        # target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
-        # if action == self.ATTACK_ACTION:
-        #     # reward for attacking while near and facing the target block
-        #     if target_ahead:
-        #         reward += 1.0
-        #         if in_attack_range:
-        #             reward += 0.2
-        #     else:
-        #         reward -= 0.5
+        target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
+        if action == self.ATTACK_ACTION:
+            # reward for attacking while near and facing the target block
+            if target_ahead:
+                reward += 0.3
+            else:
+                reward -= 0.3
 
-        if action == self.FORWARD_ACTION and self.pit_ahead(prev_info):
-            # penalty for walking into the pit
+        # avoid pit
+        yaw = float(prev_info.get("Yaw", 0))
+        fx, fz = self.yaw_to_direction(yaw)
+        lx, lz = fz, -fx
+        rx, rz = -fz, fx
+        if action == self.FORWARD_ACTION and self.pit_in_direction(prev_info, fx, fz):
+            # forward into pit penalty
+            reward -= 1.0
+        if action == 3 and self.pit_in_direction(prev_info, lx, lz):
+            # strafe into pit penalty
+            reward -= 1.0
+        if action == 4 and self.pit_in_direction(prev_info, rx, rz):
             reward -= 1.0
 
         # navigation rewards
@@ -278,11 +290,7 @@ class Task(BaseTask):
 
         return False 
     
-    def pit_ahead(self, info_dict):
-        # check if there's a pit ahead
-        yaw = float(info_dict.get("Yaw", 0))
-        fx, fz = self.yaw_to_direction(yaw)
-
-        below_front = self.get_board_block(info_dict, fx, -1, fz)
-
-        return below_front == "air"
+    def pit_in_direction(self, info_dict, dx, dz):
+        # check if there's a pit in either direction
+        below = self.get_board_block(info_dict, dx, -1, dz)
+        return below == "air"
