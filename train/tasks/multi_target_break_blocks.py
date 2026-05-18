@@ -85,12 +85,14 @@ class Task(BaseTask):
         self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
         self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
         self.select_correct_tool_once = False
+        self.reached_once = False
         self.embedding_cache = {}
 
     def reset(self, instruction=None, eval_mode=False):
         self.stuck_movement_counter = 0
         self.current_tool_action = 5
         self.select_correct_tool_once = False
+        self.reached_once = False
 
         if instruction is None:  # randomly samples an instruction during trianing
             self.current_target = random.choice(self.TARGETS)
@@ -176,7 +178,7 @@ class Task(BaseTask):
     def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
         # additional reward logic
         reward = float(raw_reward)
-        reward -= 0.05  # global penalty
+        reward -= 0.01  # global penalty
         done = False
         metrics = {}  # saving agent stats for debug purposes, not used
 
@@ -192,25 +194,10 @@ class Task(BaseTask):
         prev_target = self.find_nearest_block(prev_info, self.current_target)
         curr_target = self.find_nearest_block(curr_info, self.current_target)
 
-        if action in self.TOOL_ACTIONS:
-            # give penalty for selecting the wrong tool
-            self.current_tool_action = action
-            if action == self.REQUIRED_TOOL_ACTION[self.current_target]:
-                if not self.select_correct_tool_once:
-                    reward += 1.0
-                    self.select_correct_tool_once = True
-            else:
-                reward -= 0.2
-
-        correct_tool = self.current_tool_action == self.REQUIRED_TOOL_ACTION[self.current_target]
-
         target_item = self.TARGET_DROP_ITEM[self.current_target]
         if self.inventory_contains(curr_info, target_item):
-            # alternative win condition of collecting target drop item
-            if correct_tool:
-                reward += self.REACH_REWARD
-            else:
-                reward += 20.0
+            # win condition of collecting target drop item
+            reward += self.REACH_REWARD
 
             done = True
             return reward, done, metrics
@@ -218,61 +205,56 @@ class Task(BaseTask):
         if curr_target is None or prev_target is None:
             return reward, done, metrics
         
-        prev_distance = prev_target["distance"]
-        in_attack_range = self.MIN_ATTACK_RANGE < prev_distance <= self.MAX_ATTACK_RANGE
+        # prev_distance = prev_target["distance"]
+        # in_attack_range = self.MIN_ATTACK_RANGE < prev_distance <= self.MAX_ATTACK_RANGE
 
-        target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
-        if action == self.ATTACK_ACTION:
-            # reward for attacking while near and facing the target block
-            if in_attack_range:
-                reward += 1.0
-                if target_ahead:
-                    reward += 1.0
-                if correct_tool:
-                    reward += 1.0
-            else:
-                reward -= 1.0
+        # target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
+        # if action == self.ATTACK_ACTION:
+        #     # reward for attacking while near and facing the target block
+        #     if target_ahead:
+        #         reward += 1.0
+        #         if in_attack_range:
+        #             reward += 0.2
+        #     else:
+        #         reward -= 0.5
 
         if action == self.FORWARD_ACTION and self.pit_ahead(prev_info):
             # penalty for walking into the pit
             reward -= 1.0
 
         # navigation rewards
-        if correct_tool and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
-            # extra reward for facing the target
-            reward += self.GOOD_FACING_REWARD
-
-        if action == self.FORWARD_ACTION and prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES and not in_attack_range:
-            # reward for moving forward when facing the target
-            reward += 0.08
-
-
         distance_progress = prev_target["distance"] - curr_target["distance"]
-        look_progress = prev_target["yaw_error"] - curr_target["yaw_error"]
 
-        # reward += self.DISTANCE_PROGRESS_SCALE * clamp(distance_progress, -1.0, 1.0)
-        reward += self.LOOK_PROGRESS_SCALE * self.clamp(look_progress, -10.0, 10.0)
-
-        if curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
-            # give distance reward only when roughly facing the target
+        if prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # give distance reward when roughly facing the target
             reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
+            # more reward for moving towards to the object
+            if action == self.FORWARD_ACTION:
+                reward += 0.08
 
-        if action in self.MOVEMENT_ACTIONS and distance_progress <= 0.01:
-            # penalty for not making no progress when moving forward (like moving against a wall)
-            reward += self.NO_PROGRESS_PENALTY
-            self.stuck_movement_counter += 1
-            if self.stuck_movement_counter >= 5:
-                reward -= 0.40
-        else:
-            self.stuck_movement_counter = 0
-
-        if action in self.TURN_ACTIONS and prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
-            # penalty for turning when already facing the target
-            reward += self.UNNECESSARY_TURN_PENALTY
+            if action in self.TURN_ACTIONS:
+                # penalty for turning when already facing the target
+                reward += self.UNNECESSARY_TURN_PENALTY
 
         if action == self.FORWARD_ACTION and prev_target["yaw_error"] > self.BAD_FACING_DEGREES:
             # penalty for moving forward when not facing the target
             reward += self.BAD_FORWARD_PENALTY
+
+        prev_x = float(prev_info.get("XPos", 0.0))
+        prev_z = float(prev_info.get("ZPos", 0.0))
+        curr_x = float(curr_info.get("XPos", 0.0))
+        curr_z = float(curr_info.get("ZPos", 0.0))
+        pos_delta = ((curr_x - prev_x) ** 2 + (curr_z - prev_z) ** 2) ** 0.5
+        if action in self.MOVEMENT_ACTIONS and pos_delta < 0.03:
+            # penalty for not making no progress when moving forward (like moving against a wall)
+            reward += self.NO_PROGRESS_PENALTY
+
+        if curr_target["distance"] <= self.MAX_ATTACK_RANGE and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
+            # reward for reaching and facing the target
+            if not self.reached_once:
+                reward += 10.0
+                self.reached_once = True
+            # done = True
 
         return reward, done, metrics
 
