@@ -58,7 +58,7 @@
         <Name>Agent0</Name>
 
         <AgentStart>
-            <Placement x="1.5" y="4.0" z="5.5" yaw="270" pitch="27" />
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="27" />
 
             <Inventory>
                 <InventoryItem slot="0" type="diamond_pickaxe" quantity="1" />
