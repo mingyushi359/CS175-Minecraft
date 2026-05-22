@@ -87,7 +87,7 @@ class Task(BaseTask):
         self.stuck_movement_counter = 0
         self.current_instruction = None
         self.current_target = None
-        self.current_tool_action = 5
+        self.current_tool_action = None
         self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
         self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
         self.select_correct_tool_once = False
@@ -96,7 +96,7 @@ class Task(BaseTask):
 
     def reset(self, instruction=None, eval_mode=False):
         self.stuck_movement_counter = 0
-        self.current_tool_action = 5
+        self.current_tool_action = None
         self.select_correct_tool_once = False
         self.reached_once = False
 
@@ -219,6 +219,17 @@ class Task(BaseTask):
                 reward += 0.3
             else:
                 reward -= 0.3
+
+        # tool selection reward
+        if action in self.TOOL_ACTIONS:
+            self.current_tool_action = action
+
+            if action == self.REQUIRED_TOOL_ACTION[self.current_target]:
+                if not self.select_correct_tool_once:
+                    reward += 10.0
+                    self.select_correct_tool_once = True
+            else:
+                reward -= 0.5
 
         # avoid pit
         yaw = float(prev_info.get("Yaw", 0))
