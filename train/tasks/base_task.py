@@ -127,6 +127,26 @@ class BaseTask:
             return (-1, 0)     # -x
         else:
             return (0, -1)     # -z
+        
+    def build_spatial_grid(self, info_dict, block_types: list[str], radius=6, dy=0):
+        # build a spatial grid given a list of target block str, e.g. ["diamond_ore", "log", "sand"]
+        channels = []
+
+        for block_type in block_types:
+            grid = []
+
+            for dz in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    block = self.get_board_block(info_dict, dx, dy, dz)
+
+                    if block_type == "obstacle":
+                        val = 1.0 if self.is_block(block) and block not in self.TARGETS else 0.0
+                    else:
+                        val = 1.0 if block == block_type else 0.0
+
+                    grid.append(val)
+            channels.extend(grid)
+        return channels
     
     def is_block(self, block_name):
         return block_name not in ["air", "water"]
