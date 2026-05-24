@@ -243,6 +243,7 @@ if __name__ == '__main__':
     parser.add_argument('--instruction', type=str, default=None, help='text instruction for eval')
     parser.add_argument('--projection', action='store_true', help='enable the projection layer for multi-target instruction training, else defaults to raw etxt embedding concact')
     parser.add_argument('--random', action='store_true', help='randomize xml for each episode, need to define "make_random_mission_xml" in task-py and add <MissionQuitCommands/> to xml')
+    parser.add_argument('--load-model', type=str, default=None, help='path to a PPO checkpoint (.zip) to continue training')
     parser.add_argument('--lr', type=float, default=3e-4, help='PPO learning rate')
     parser.add_argument('--n-steps', type=int, default=512, help='PPO n_steps before policy update')
     parser.add_argument('--batch-size', type=int, default=64, help='PPO batch size')
@@ -320,19 +321,23 @@ if __name__ == '__main__':
                   f"text_dim: {task_module.TEXT_MODEL_DIM}, " \
                   f"text_out_dim: {task_module.TEXT_OUT_DIM}"
                   )
-
-        model = PPO(
-            "MlpPolicy",
-            env,
-            verbose=1,
-            learning_rate=args.lr,
-            n_steps=args.n_steps,
-            batch_size=args.batch_size,
-            gamma=args.gamma,
-            ent_coef=args.ent_coef,
-            policy_kwargs=policy_kwargs,
-            device="cpu",
-        )
+            
+        if args.load_model:  # load existing checkpoint
+            model = PPO.load(args.load_model, env=env, device="cpu")
+            model.learning_rate = args.lr
+        else:
+            model = PPO(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                learning_rate=args.lr,
+                n_steps=args.n_steps,
+                batch_size=args.batch_size,
+                gamma=args.gamma,
+                ent_coef=args.ent_coef,
+                policy_kwargs=policy_kwargs,
+                device="cpu",
+            )
 
         checkpoint_callback = CheckpointCallback(
             save_freq=2500,
