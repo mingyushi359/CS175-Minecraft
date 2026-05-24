@@ -1,4 +1,5 @@
 import argparse
+import copy
 import importlib.util
 import json
 import time
@@ -87,37 +88,8 @@ class MalmoStructuredEnv(gym.Env):
         self.prev_state = None
         self.last_frame = None
 
-        xml = Path(args.mission).read_text()
-        self.env = malmoenv.make()
-        
-        # custom actions can be defined in the task specific reward module and mission XML
-        custom_actions = task_module.CUSTOM_ACTIONS if task_module else None
-
-        if custom_actions is not None:
-            self.env.init(
-                xml,
-                args.port,
-                server=args.server,
-                server2=args.server2,
-                port2=args.port2,
-                role=args.role,
-                exp_uid=args.experimentUniqueId,
-                episode=args.episode,
-                resync=args.resync,
-                action_space = ActionSpace(custom_actions),  
-            )
-        else:  # default action space will be inferred from the mission XML only
-            self.env.init(
-                xml,
-                args.port,
-                server=args.server,
-                server2=args.server2,
-                port2=args.port2,
-                role=args.role,
-                exp_uid=args.experimentUniqueId,
-                episode=args.episode,
-                resync=args.resync,
-            )
+        self.env = None
+        self.init_malmo_env()
 
         print({i: self.env.action_space[i] for i in range(self.env.action_space.n)})
 
@@ -129,10 +101,57 @@ class MalmoStructuredEnv(gym.Env):
             dtype=np.float32,
         )
 
-        self.action_space = spaces.Discrete(self.env.action_space.n)
+        if self.task_module is not None:
+            # initialize PPO without the quit action
+            self.action_space = spaces.Discrete(len(self.task_module.CUSTOM_ACTIONS))
+        else:
+            self.action_space = spaces.Discrete(self.env.action_space.n)
+
+    def init_malmo_env(self):
+        # initialize malmo env
+
+        # use random generated raw mission xml
+        if getattr(self.args, "random", False) and hasattr(self.task_module, "make_random_mission_xml"):
+            xml = self.task_module.make_random_mission_xml(self.args.mission)
+        else:  # else use default xml
+            xml = Path(self.args.mission).read_text()
+
+        self.env = malmoenv.make()
+        # custom_actions = self.task_module.CUSTOM_ACTIONS if self.task_module else None
+
+        # task actions provided from task-py
+        task_actions = self.task_module.CUSTOM_ACTIONS if self.task_module else None
+        self.quit_action_index = None
+
+        if task_actions is not None:  # add quit to custom actions
+            custom_actions = list(task_actions) + ["quit"]
+            self.quit_action_index = len(task_actions)
+        else:
+            custom_actions = None
+
+        init_kwargs = dict(
+            server=self.args.server,
+            server2=self.args.server2,
+            port2=self.args.port2,
+            role=self.args.role,
+            exp_uid=self.args.experimentUniqueId,
+            episode=self.args.episode,
+            resync=self.args.resync,
+        )
+
+        if custom_actions is not None:  # initalize malmo with additioanl quit action
+            init_kwargs["action_space"] = ActionSpace(custom_actions)
+
+        self.env.init(xml, self.args.port, **init_kwargs)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        # re-initialize malmo env per episode for randomized mission xml
+        if getattr(self.args, "random", False):
+            if self.env is not None:
+                self.env.close()
+            self.init_malmo_env()
 
         self.env.reset()
         self.steps = 0
@@ -187,6 +206,14 @@ class MalmoStructuredEnv(gym.Env):
 
         terminated = bool(done or task_done)
         truncated = bool(self.args.episodemaxsteps > 0 and self.steps >= self.args.episodemaxsteps)
+        if (task_done or truncated) and not done and self.quit_action_index is not None:
+            try:  # manually calling quit action when done=True
+                self.env.step(self.quit_action_index)
+                # gives time for malmo to quit before reset
+                # you might want to increase delay if the minecraft window ever gets frozen or unresponsive
+                time.sleep(0.3)  
+            except Exception as e:
+                print(f"Warning: failed to send Malmo quit command: {e}")
 
         return state, reward, terminated, truncated, info_dict
     
@@ -215,6 +242,7 @@ if __name__ == '__main__':
     parser.add_argument('--record', action='store_true', help='record videos during evaluation')
     parser.add_argument('--instruction', type=str, default=None, help='text instruction for eval')
     parser.add_argument('--projection', action='store_true', help='enable the projection layer for multi-target instruction training, else defaults to raw etxt embedding concact')
+    parser.add_argument('--random', action='store_true', help='randomize xml for each episode, need to define "make_random_mission_xml" in task-py and add <MissionQuitCommands/> to xml')
 
     args = parser.parse_args()
     if args.server2 is None:
@@ -308,7 +336,7 @@ if __name__ == '__main__':
 
         plot_callback = PlotCallback(
             log_dir=log_dir,
-            save_freq=2000,
+            save_freq=512,
         )
 
         callback = CallbackList([checkpoint_callback, plot_callback])
