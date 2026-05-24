@@ -243,6 +243,12 @@ if __name__ == '__main__':
     parser.add_argument('--instruction', type=str, default=None, help='text instruction for eval')
     parser.add_argument('--projection', action='store_true', help='enable the projection layer for multi-target instruction training, else defaults to raw etxt embedding concact')
     parser.add_argument('--random', action='store_true', help='randomize xml for each episode, need to define "make_random_mission_xml" in task-py and add <MissionQuitCommands/> to xml')
+    parser.add_argument('--lr', type=float, default=3e-4, help='PPO learning rate')
+    parser.add_argument('--n-steps', type=int, default=512, help='PPO n_steps before policy update')
+    parser.add_argument('--batch-size', type=int, default=64, help='PPO batch size')
+    parser.add_argument('--gamma', type=float, default=0.99, help='PPO gamma')
+    parser.add_argument('--ent-coef', type=float, default=0.01, help='PPO entropy')
+
 
     args = parser.parse_args()
     if args.server2 is None:
@@ -319,11 +325,11 @@ if __name__ == '__main__':
             "MlpPolicy",
             env,
             verbose=1,
-            learning_rate=3e-4,
-            n_steps=512,
-            batch_size=64,
-            gamma=0.99,
-            ent_coef=0.01,
+            learning_rate=args.lr,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            gamma=args.gamma,
+            ent_coef=args.ent_coef,
             policy_kwargs=policy_kwargs,
             device="cpu",
         )
