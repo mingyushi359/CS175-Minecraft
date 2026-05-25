@@ -73,7 +73,8 @@ class PlotCallback(BaseCallback):
 
     def _on_step(self):
         if self.num_timesteps % self.save_freq == 0:
-            utility.save_monitor_plots(self.log_dir)
+            # utility.save_monitor_plots(self.log_dir)
+            utility.save_monitor_plots_by_target(self.log_dir)
         return True
 
 class MalmoStructuredEnv(gym.Env):
@@ -194,6 +195,9 @@ class MalmoStructuredEnv(gym.Env):
                     step=self.steps,
                 )
 
+                if hasattr(self.task_module, "current_target"):  # read current target for log plotting
+                    info_dict["target"] = self.task_module.current_target
+
             state = build_state(info_dict, task_module=self.task_module)
 
             self.prev_info_dict = info_dict
@@ -211,10 +215,13 @@ class MalmoStructuredEnv(gym.Env):
                 self.env.step(self.quit_action_index)
                 # gives time for malmo to quit before reset
                 # you might want to increase delay if the minecraft window ever gets frozen or unresponsive
-                time.sleep(0.3)  
+                time.sleep(0.225 + 0.025 * self.steps // 50000)
             except Exception as e:
                 print(f"Warning: failed to send Malmo quit command: {e}")
 
+        if "target" not in info_dict:
+            info_dict["target"] = "N/A"
+        
         return state, reward, terminated, truncated, info_dict
     
     def close(self):
@@ -303,7 +310,7 @@ if __name__ == '__main__':
 
     else:
         log_dir = Path(args.model_path)
-        env = Monitor(env, filename=str(log_dir / "monitor.csv"))  # Monitor warpper for logging rewards
+        env = Monitor(env, filename=str(log_dir / "monitor.csv"), info_keywords=("target",))  # Monitor warpper for logging rewards
 
         policy_kwargs=dict(  # larger PPO network
             net_arch=dict(pi=[256, 256], vf=[256, 256])
@@ -358,6 +365,6 @@ if __name__ == '__main__':
             print(f"Saved PPO model to {args.model_path}/ppo_final.zip")
         finally:
             if not args.eval:
-                utility.save_monitor_plots(log_dir)  # call save plots before exiting
-
+                # utility.save_monitor_plots(log_dir)  # call save plots before exiting
+                utility.save_monitor_plots_by_target(log_dir)
     env.close()
