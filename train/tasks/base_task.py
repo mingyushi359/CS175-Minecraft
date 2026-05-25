@@ -153,7 +153,7 @@ class BaseTask:
 
     def yaw_error_to_target(self, agent_yaw, dx, dz):
         target_yaw = math.degrees(math.atan2(-dx, dz))
-        return abs(self.angle_difference_degrees(agent_yaw, target_yaw))
+        return self.angle_difference_degrees(agent_yaw, target_yaw)
 
     def angle_difference_degrees(self, a, b):
         return (a - b + 180.0) % 360.0 - 180.0
