@@ -91,7 +91,7 @@ def save_monitor_plots_by_target(log_dir, rolling_window=20):
     ]
 
     # reward Plot
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(10, 5))
 
     for i, target in enumerate(targets):
         target_df = df[df["target"] == target].copy()
@@ -133,7 +133,7 @@ def save_monitor_plots_by_target(log_dir, rolling_window=20):
     plt.close()
 
     # steps Plot
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(10, 5))
 
     for i, target in enumerate(targets):
         target_df = df[df["target"] == target].copy()
