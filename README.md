@@ -61,11 +61,11 @@ The original sample scripts and missions are located in `MalmoPlatform/MalmoEnv/
 
 
 ## Training PPO Agent
-### Single Target
-
+### Example training command
 ```bash
-python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
+python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
 ```
+
 `--mission` is the mission.xml file
 
 `--episodemaxsteps` is the max steps the agent can take per episode
@@ -74,30 +74,36 @@ python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --epi
 
 `--model-path` is the path where the trained models and logs will be saved
 
-`--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` as an example
+`--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` or `multi_target_navigation` as an example
 
-
-### Multi-Target
-```bash
-python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
-```
-
-The training command for multi-target tasks is the mostly same. Just change the `--task-py` and `--mission` accordingly
+For multi-target tasks:
 
 `--projection` is an optional argument for enabling the projection layer that projects the text instruction through trainable MLP instead of passing the raw encoded embedding into the PPO network
 
-Note that current multi-target setup might requires more timesteps. It's recommended to set `--total-timesteps` to 150000 for tasks like `multi_target_navigation.py` just in case it takes more steps to train, but you can always end early as needed
+`--random` is an optinal argument for enabling randomized mission xml generation per episode. 
 
----
+`--load-model` loads an existing checkpoint and continues to train on top
+
+PPO model arguments default:
+
+`--lr`: 3e-4
+
+`--n-steps`: 512
+
+`--batch-size`: 64
+
+`--gamma`: 0.99
+
+`--ent-coef`: 0.01
 
 ## Evaluating PPO Agent
-### Single Target
+### Example evaluation command
 
 ```bash
-python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/mob_chase.py --model-path ppo_logs/out1/ppo_final.zip --task-py train/tasks/mob_chase.py --eval --episodes 5
+python train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_navigation.py --model-path ppo_logs/out13/ppo_65000_steps.zip --projection --eval --episodes 5 --instruction "go to the pig" 
 ```
 
-`--mission`, `--task-py`, and `--episodemaxsteps 100` are the same as training
+`--mission`, `--task-py`, and `--episodemaxsteps` are the same as training
 
 `--model-path` need to be exact path to a saved checkpoint (.zip)
 
@@ -107,36 +113,78 @@ python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episod
 
 `--record` optionally records the evluation and saves as GIF
 
+For multi-target tasks:
+
+`--projection` need to be consistent with training
+
+`--random` need to be consistent with training
+
+`--instruction` need to pass in the text instruction for multi-target evaluation
+
 In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation. Not ideal, but performs better is some cases
 
-### Multi-Target
+---
+
+## Missions
+### mob_chase.py (single target)
+#### Training Command
+
+```bash
+python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
+```
+#### Evaluation Command
+
+```bash
+python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/mob_chase.py --model-path ppo_logs/out1/ppo_final.zip --task-py train/tasks/mob_chase.py --eval --episodes 5
+```
+
+#### Example Recording
+<img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
+<img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
+
+---
+
+### multi_target_navigation.py (multi-target)
+#### Training Command
+
+```bash
+python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
+```
+
+#### Evaluation Command
 
 ```bash
 python train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_navigation.py --model-path ppo_logs/out13/ppo_65000_steps.zip --projection --eval --episodes 5 --instruction "go to the pig" 
 ```
-Mostly the same as single target eval, except:
 
-`--projection` need to be consistent with training
+#### Example Recording
 
-`--instruction` need to pass in the text instruction for multi-target evaluation
-
-## Example Recording
-### mob_chase
-<img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
-<img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
-
-### multi_target_navigation
 |"go to the pig"|"go to the log"|"go to the emerald"|
 | -------- | -------- | -------- |
 |<img width="160" height="120" alt="episode_0_reward_48 05" src="https://github.com/user-attachments/assets/b13984b9-0120-4780-ba5a-03c337b70104" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="https://github.com/user-attachments/assets/a3f11098-c3dc-4157-89d9-142b889c8799" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="https://github.com/user-attachments/assets/51485fcb-8668-44c0-9889-7afb225e43d3" />|
 
-## Example learning plot
-### multi_target_navigation
+#### Example learning plot
 
 <img width="1500" height="750" alt="reward_curve" src="https://github.com/user-attachments/assets/8dbd5fe0-482e-4537-a261-0c19e195bdca" />
 <img width="1500" height="750" alt="steps_curve" src="https://github.com/user-attachments/assets/3b2fc9f8-9191-44db-9f8f-59e6736a1284" />
 
 This run was from the "Add obstacle states" commit. The best model appears to be the 57500_steps checkpoint, and the learning started to drift away after that
+
+---
+
+### multi_target_break_blocks.py (multi-target)
+#### Training Command (with randomly shuffle target block layout)
+
+Training with batch of 20
+```bash
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 400000 --model-path ppo_logs_break_blocks/out12/ --task-py train/tasks/multi_target_break_blocks.py --projection --random --lr 3e-4 --n-steps 1024 --batch-size 128 > ppo_logs_break_blocks/out12/out.txt 2>&1
+```
+
+#### Evaluation Command
+
+```bash
+python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 50 --task-py train/tasks/multi_target_break_blocks.py --model-path ppo_logs_break_blocks/out09/ppo_150000_steps.zip --projection --random --eval --episodes 5 --instruction "break the diamond ore" 
+```
 
 ---
 

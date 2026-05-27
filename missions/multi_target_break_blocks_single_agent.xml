@@ -29,20 +29,26 @@
                 <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
 
                 <!-- Fenced arena. -->
-                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="5" z2="0" type="spruce_fence" />
-                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="5" z2="12" type="spruce_fence" />
-                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="5" z2="12" type="spruce_fence" />
-                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="5" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="4" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
 
+                <DrawCuboid x1="11" y1="4" z1="0" x2="11" y2="4" z2="12" type="fence" />
+                
                 <!-- Tool-task target blocks. -->
                 <!-- Pickaxe target. -->
-                <DrawCuboid x1="11" y1="4" z1="1" x2="11" y2="4" z2="1" type="diamond_ore" />
+                <DrawCuboid x1="11" y1="5" z1="__DIAMOND_Z__" x2="11" y2="5" z2="__DIAMOND_Z__" type="diamond_ore" />
+                <DrawBlock x="11" y="4" z="__DIAMOND_Z__" type="fence" />
 
                 <!-- Axe target. -->
-                <DrawCuboid x1="11" y1="4" z1="6" x2="11" y2="4" z2="6" type="log" />
+                <DrawCuboid x1="11" y1="5" z1="__LOG_Z__" x2="11" y2="5" z2="__LOG_Z__" type="log" />
+                <DrawBlock x="11" y="4" z="__LOG_Z__" type="fence" />
 
                 <!-- Shovel target. -->
-                <DrawCuboid x1="11" y1="4" z1="11" x2="11" y2="4" z2="11" type="sand" />
+                <DrawCuboid x1="11" y1="5" z1="__CLAY_Z__" x2="11" y2="5" z2="__CLAY_Z__" type="clay" />
+                <DrawBlock x="11" y="4" z="__CLAY_Z__" type="fence" />
+
 
                 <!-- Far visual landmarks outside observation range. -->
                 <DrawCuboid x1="-30" y1="4" z1="6" x2="-30" y2="10" z2="6" type="diamond_block" />
@@ -58,7 +64,9 @@
         <Name>Agent0</Name>
 
         <AgentStart>
-            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="27" />
+            <!-- <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="27" /> -->
+            <Placement x="5.5" y="4.0" z="6.5" yaw="270" pitch="0" />
+            <!-- <Placement x="__AGENT_X__" y="4.0" z="__AGENT_Z__" yaw="270" pitch="27" /> -->
 
             <Inventory>
                 <InventoryItem slot="0" type="diamond_pickaxe" quantity="1" />
@@ -91,19 +99,15 @@
                     <max x="12" y="1" z="12" />
                 </Grid>
             </ObservationFromGrid>
+            <ObservationFromRay/>
 
             <ObservationFromFullInventory />
             <ObservationFromHotBar />
             <ObservationFromFullStats />
 
-            <RewardForSendingCommand reward="-0.01" />
+            <MissionQuitCommands/>
 
-            <!-- Optional sparse XML rewards. You can remove these if all reward is handled in Python. -->
-            <!-- <RewardForCollectingItem>
-                <Item type="diamond" reward="20" />
-                <Item type="log" reward="20" />
-                <Item type="gravel" reward="20" />
-            </RewardForCollectingItem> -->
+            <RewardForSendingCommand reward="-0.01" />
 
             <VideoProducer want_depth="false">
                 <Width>400</Width>

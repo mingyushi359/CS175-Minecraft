@@ -1,10 +1,12 @@
 import random
+from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from tasks.base_task import BaseTask
 
 class Task(BaseTask):
     TASK_ID = 3
-    TARGETS = ["diamond_ore","log","sand"]
+    TARGETS = ["diamond_ore","log","clay"]
+    TARGET_EPISODE_BATCH = 20  # run 20 consecutive episodes for each target
 
     CUSTOM_ACTIONS = [
         "move 1",
@@ -32,76 +34,66 @@ class Task(BaseTask):
                 # "wood", 
                 # "wooden block"
                 ],
-        "sand": ["sand"],
+        "clay": ["clay"],
     }
 
     REQUIRED_TOOL_ACTION = {
         "diamond_ore": 5,  # hotbar.1 / pickaxe
         "log": 6,          # hotbar.2 / axe
-        "sand": 7,       # hotbar.3 / shovel
+        "clay": 7,       # hotbar.3 / shovel
     }
 
     TARGET_DROP_ITEM = {
         "diamond_ore": "diamond",
         "log": "log",
-        "sand": "sand",
+        "clay": "clay_ball",
     }
 
     # sentence transformers
     TEXT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     TEXT_MODEL_DIM = 384
     TEXT_OUT_DIM = 64
-    STATE_DIM = 25  # state dim produced from your build_state, excluding text dim
+    STATE_DIM = 28  # state dim produced from your build_state, excluding text dim
 
     # ObservationFromGrid, same as the one in xml
     GRID_MIN = {"x": -12, "y": -1, "z": -12}
     GRID_MAX = {"x": 12, "y": 1, "z": 12}
 
     # custom rewards
-    REACH_DISTANCE = 2.0
-    REACH_REWARD = 80.0
-    DISTANCE_PROGRESS_SCALE = 1.0
-    LOOK_PROGRESS_SCALE = 0.03
+    CORRECT_BREAK_REWARD = 80.0
+    WRONG_BREAK_PENALTY = -25.0
 
-    MAX_ATTACK_RANGE = 3.3
+    MAX_ATTACK_RANGE = 4.0
     MIN_ATTACK_RANGE = 0.0
 
-    GOOD_FACING_DEGREES = 45.0
-    OK_FACING_DEGREES = 60.0
-    BAD_FACING_DEGREES = 90.0
-    GOOD_FACING_REWARD = 0.03
-
     TURN_ACTIONS = [1, 2]  # left, right
-    UNNECESSARY_TURN_PENALTY = -0.08
-
     FORWARD_ACTION = 0
-    BAD_FORWARD_PENALTY = -0.10
-    NO_PROGRESS_PENALTY = -0.20
-
     ATTACK_ACTION = 8
     MOVEMENT_ACTIONS = [0, 3, 4]  # forward, strafe left/right
     TOOL_ACTIONS = [5, 6, 7]
 
     def __init__(self):
         super().__init__()
-        self.stuck_movement_counter = 0
         self.current_instruction = None
         self.current_target = None
         self.current_tool_action = None
         self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
         self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
+        self.current_episode = 0
         self.select_correct_tool_once = False
         self.reached_once = False
+        self.penalized_wrong_breaks = set()
         self.embedding_cache = {}
 
     def reset(self, instruction=None, eval_mode=False):
-        self.stuck_movement_counter = 0
         self.current_tool_action = None
         self.select_correct_tool_once = False
         self.reached_once = False
+        self.penalized_wrong_breaks = set()
 
         if instruction is None:  # randomly samples an instruction during trianing
-            self.current_target = random.choice(self.TARGETS)
+            self.current_episode += 1
+            self.current_target = self.choose_target()
             template = random.choice(self.INSTRUCTION_TEMPLATE)
             target_alias = random.choice(self.INSTRUCTION_TARGET_ALIASES[self.current_target])
             self.current_instruction = template.format(target_alias)
@@ -110,6 +102,11 @@ class Task(BaseTask):
             self.current_target = self.parse_target(instruction)
 
         self.current_instruction_embedding = self.encode_instruction(self.current_instruction)
+
+    def choose_target(self):
+        # let each target run for some consecutive episodes
+        target_idx = (self.current_episode // self.TARGET_EPISODE_BATCH) % len(self.TARGETS)
+        return self.TARGETS[target_idx]
 
     def encode_instruction(self, text):
         # sentence transformer
@@ -128,10 +125,29 @@ class Task(BaseTask):
             return "diamond_ore"
         if "log" in text or "wood" in text or "wooden" in text:
             return "log"
-        if "sand" in text :
-            return "sand"
+        if "clay" in text :
+            return "clay"
 
         raise ValueError(f"Unknown instruction: {instruction}")
+    
+    def make_random_mission_xml(self, mission_path):
+        # randomly shuffles the popsition of the target
+        base_xml = Path(mission_path).read_text()
+
+        zs = [1, 6, 11]
+        random.shuffle(zs)
+
+        # agent_x = random.choice([5.5, 6.5, 7.5])
+        # agent_z = random.choice([5.5, 6.5, 7.5])
+
+        return (
+                base_xml
+                .replace("__DIAMOND_Z__", str(zs[0]))
+                .replace("__LOG_Z__", str(zs[1]))
+                .replace("__CLAY_Z__", str(zs[2]))
+                # .replace("__AGENT_X__", str(agent_x))
+                # .replace("__AGENT_Z__", str(agent_z))
+            )
 
     def build_state(self, info_dict):
         # build state for multi target
@@ -143,10 +159,10 @@ class Task(BaseTask):
 
         diamond_ore = self.find_nearest_block(info_dict, "diamond_ore")
         log = self.find_nearest_block(info_dict, "log")
-        sand = self.find_nearest_block(info_dict, "sand")
+        clay = self.find_nearest_block(info_dict, "clay")
 
         target_features = []
-        for target in [diamond_ore, log, sand]:
+        for target in [diamond_ore, log, clay]:
             if target is not None:
                 target_features.extend([
                     target["dx"] / 12.0,
@@ -177,7 +193,25 @@ class Task(BaseTask):
             1.0 if self.current_tool_action == 7 else 0.0,  # shovel
         ]
 
-        return agent_features + target_features + obstacle_features + tool_features + [float(self.TASK_ID)] + self.current_instruction_embedding
+        # line of sight
+        los_features = [
+            1.0 if self.los_matches_target(info_dict) else 0.0,
+            1.0 if self.los_matches_wrong_target(info_dict) else 0.0,
+            1.0 if self.los_in_range(info_dict) else 0.0,
+        ]
+
+        # target_spatial_features = self.build_spatial_grid(info_dict, ["diamond_ore", "log", "clay"], radius=6)
+
+        compact_features = (
+            agent_features + 
+            target_features + 
+            obstacle_features + 
+            tool_features + 
+            los_features + 
+            [float(self.TASK_ID)]
+        )
+
+        return compact_features + self.current_instruction_embedding
 
     def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
         # additional reward logic
@@ -189,36 +223,46 @@ class Task(BaseTask):
         if not curr_info or not prev_info:  # skip if info_dict is empty
             return reward, done, metrics 
         
-        if float(curr_info.get("YPos", 4.0)) < 3.5:
-            # terminate if y level changes (fall into the pit)
-            reward -= 10.0
-            done = True
-            return reward, done, metrics
+        # early terminate if y level changes (fall into the pit)
+        # if float(curr_info.get("YPos", 4.0)) < 3.5:
+        #     reward -= 20.0
+        #     done = True
+        #     return reward, done, metrics
 
-        prev_target = self.find_nearest_block(prev_info, self.current_target)
-        curr_target = self.find_nearest_block(curr_info, self.current_target)
-
+        # win condition (collect drop item)
         target_item = self.TARGET_DROP_ITEM[self.current_target]
         if self.inventory_contains(curr_info, target_item):
-            # win condition of collecting target drop item
-            reward += self.REACH_REWARD
+            reward += self.CORRECT_BREAK_REWARD
 
             done = True
             return reward, done, metrics
 
-        if curr_target is None or prev_target is None:
-            return reward, done, metrics
-        
-        # prev_distance = prev_target["distance"]
-        # in_attack_range = self.MIN_ATTACK_RANGE < prev_distance <= self.MAX_ATTACK_RANGE
+        # attack reward/penalty
+        # target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE))
+        # if action == self.ATTACK_ACTION:
+        #     if target_ahead:
+        #         reward += 0.5
+        #     else:
+        #         reward -= 0.3
 
-        target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE + 1))
         if action == self.ATTACK_ACTION:
-            # reward for attacking while near and facing the target block
-            if target_ahead:
-                reward += 0.3
+            if self.los_matches_target(prev_info):  # this is win condition, reward already applied
+                reward += 0.0
+            elif self.los_matches_wrong_target(prev_info):  # breaking the wrong target
+                reward -= 2.0
             else:
                 reward -= 0.3
+
+        # penalty for breaking other target block
+        for other_target in [t for t in self.TARGETS if t != self.current_target]:
+            if other_target in self.penalized_wrong_breaks:
+                continue
+
+            other_drop = self.TARGET_DROP_ITEM[other_target]
+
+            if self.inventory_contains(curr_info, other_drop):
+                reward += self.WRONG_BREAK_PENALTY
+                self.penalized_wrong_breaks.add(other_target)
 
         # tool selection reward
         if action in self.TOOL_ACTIONS:
@@ -226,58 +270,65 @@ class Task(BaseTask):
 
             if action == self.REQUIRED_TOOL_ACTION[self.current_target]:
                 if not self.select_correct_tool_once:
-                    reward += 10.0
+                    reward += 5.0
                     self.select_correct_tool_once = True
+                else:
+                    reward -= 0.1
             else:
                 reward -= 0.5
 
         # avoid pit
-        yaw = float(prev_info.get("Yaw", 0))
-        fx, fz = self.yaw_to_direction(yaw)
-        lx, lz = fz, -fx
-        rx, rz = -fz, fx
-        if action == self.FORWARD_ACTION and self.pit_in_direction(prev_info, fx, fz):
-            # forward into pit penalty
-            reward -= 1.0
-        if action == 3 and self.pit_in_direction(prev_info, lx, lz):
-            # strafe into pit penalty
-            reward -= 1.0
-        if action == 4 and self.pit_in_direction(prev_info, rx, rz):
-            reward -= 1.0
+        # yaw = float(prev_info.get("Yaw", 0))
+        # fx, fz = self.yaw_to_direction(yaw)
+        # lx, lz = fz, -fx
+        # rx, rz = -fz, fx
+        # if action == self.FORWARD_ACTION and self.pit_in_direction(prev_info, fx, fz):
+        #     # forward into pit penalty
+        #     reward -= 1.0
+        # if action == 3 and self.pit_in_direction(prev_info, lx, lz):
+        #     # strafe into pit penalty
+        #     reward -= 1.0
+        # if action == 4 and self.pit_in_direction(prev_info, rx, rz):
+        #     reward -= 1.0
+
+        prev_target = self.find_nearest_block(prev_info, self.current_target)
+        curr_target = self.find_nearest_block(curr_info, self.current_target)
+        if curr_target is None or prev_target is None:
+            return reward, done, metrics
 
         # navigation rewards
-        distance_progress = prev_target["distance"] - curr_target["distance"]
+        prev_dist = prev_target["distance"]
+        curr_dist = curr_target["distance"]
+        prev_yaw = abs(prev_target["yaw_error"])
+        curr_yaw = abs(curr_target["yaw_error"])
 
-        if prev_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
-            # give distance reward when roughly facing the target
-            reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
-            # more reward for moving towards to the object
-            if action == self.FORWARD_ACTION:
-                reward += 0.08
+        distance_progress = prev_dist - curr_dist
+        look_progress = prev_yaw - curr_yaw
 
-            if action in self.TURN_ACTIONS:
-                # penalty for turning when already facing the target
-                reward += self.UNNECESSARY_TURN_PENALTY
+        # reward for camera angle
+        if action in self.TURN_ACTIONS:
+            reward += 0.08 * self.clamp(look_progress / 30.0, -1.0, 1.0)
 
-        if action == self.FORWARD_ACTION and prev_target["yaw_error"] > self.BAD_FACING_DEGREES:
-            # penalty for moving forward when not facing the target
-            reward += self.BAD_FORWARD_PENALTY
+        # reward for moving closer
+        if action in self.MOVEMENT_ACTIONS:
+            reward += 1.2 * self.clamp(distance_progress, -1.0, 1.0)
 
-        prev_x = float(prev_info.get("XPos", 0.0))
-        prev_z = float(prev_info.get("ZPos", 0.0))
-        curr_x = float(curr_info.get("XPos", 0.0))
-        curr_z = float(curr_info.get("ZPos", 0.0))
-        pos_delta = ((curr_x - prev_x) ** 2 + (curr_z - prev_z) ** 2) ** 0.5
-        if action in self.MOVEMENT_ACTIONS and pos_delta < 0.03:
-            # penalty for not making no progress when moving forward (like moving against a wall)
-            reward += self.NO_PROGRESS_PENALTY
+        # penalty for moving away
+        if action == self.FORWARD_ACTION and prev_yaw > 75.0:
+            reward -= 0.15
 
-        if curr_target["distance"] <= self.MAX_ATTACK_RANGE and curr_target["yaw_error"] <= self.GOOD_FACING_DEGREES:
-            # reward for reaching and facing the target
-            if not self.reached_once:
-                reward += 10.0
-                self.reached_once = True
-            # done = True
+        # penalty for turning when already facing the target
+        if action in self.TURN_ACTIONS and prev_yaw < 25.0:
+            reward -= 0.10
+
+        # one time reward when ready to attack
+        # if target_ahead and curr_yaw <= 35.0:
+        #     if not self.reached_once:
+        #         reward += 8.0
+        #         self.reached_once = True
+        if self.los_matches_target(prev_info) and not self.reached_once:
+            reward += 2.0
+            self.reached_once = True
 
         return reward, done, metrics
 
@@ -295,7 +346,7 @@ class Task(BaseTask):
         fx, fz = self.yaw_to_direction(yaw)
 
         for d in range(1, max_dist + 1):
-            block = self.get_board_block(info_dict, fx * d, 0, fz * d)
+            block = self.get_board_block(info_dict, fx * d, 1, fz * d)
             if block == self.current_target:
                 return True
 
@@ -305,3 +356,30 @@ class Task(BaseTask):
         # check if there's a pit in either direction
         below = self.get_board_block(info_dict, dx, -1, dz)
         return below == "air"
+    
+    def get_los(self, info):
+        return info.get("LineOfSight", {})
+
+    def get_los_type(self, info):
+        return self.get_los(info).get("type", None)
+
+    def los_in_range(self, info):
+        # is target interactable (left/right click)
+        return self.get_los(info).get("inRange", False)
+
+    def los_matches_target(self, info):
+        # crosshair facing the target and in range for interaction
+        return (
+            self.get_los_type(info) == self.current_target
+            and self.los_in_range(info)
+        )
+
+    def los_matches_wrong_target(self, info):
+        # crosshair 
+        block = self.get_los_type(info)
+
+        return (
+            block in self.TARGETS
+            and block != self.current_target
+            and self.los_in_range(info)
+        )
