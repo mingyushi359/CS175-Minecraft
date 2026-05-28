@@ -105,6 +105,13 @@ class Task(BaseTask):
 
     def choose_target(self):
         # let each target run for some consecutive episodes
+        if self.current_episode < 2500:
+            self.TARGET_EPISODE_BATCH = 20
+        elif self.current_episode < 3500:
+            self.TARGET_EPISODE_BATCH = 10
+        else:
+            self.TARGET_EPISODE_BATCH = 5
+
         target_idx = (self.current_episode // self.TARGET_EPISODE_BATCH) % len(self.TARGETS)
         return self.TARGETS[target_idx]
 
@@ -134,8 +141,14 @@ class Task(BaseTask):
         # randomly shuffles the popsition of the target
         base_xml = Path(mission_path).read_text()
 
-        zs = [1, 6, 11]
-        random.shuffle(zs)
+        # zs = [1, 6, 11]
+        # random.shuffle(zs)
+        layout = [
+            [1, 6, 11],
+            [6, 11, 1],
+            [11, 1, 6],
+        ]
+        zs = layout[self.current_episode % len(layout)]
 
         # agent_x = random.choice([5.5, 6.5, 7.5])
         # agent_z = random.choice([5.5, 6.5, 7.5])
