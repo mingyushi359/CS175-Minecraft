@@ -215,7 +215,7 @@ class MalmoStructuredEnv(gym.Env):
                 self.env.step(self.quit_action_index)
                 # gives time for malmo to quit before reset
                 # you might want to increase delay if the minecraft window ever gets frozen or unresponsive
-                time.sleep(0.25 + 0.025 * (self.steps // 50000))
+                time.sleep(0.25 + 0.05 * (self.steps // 40000))
             except Exception as e:
                 print(f"Warning: failed to send Malmo quit command: {e}")
 
