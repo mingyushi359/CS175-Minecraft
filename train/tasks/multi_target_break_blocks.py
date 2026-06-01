@@ -53,14 +53,14 @@ class Task(BaseTask):
     TEXT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
     TEXT_MODEL_DIM = 384
     TEXT_OUT_DIM = 64
-    STATE_DIM = 28  # state dim produced from your build_state, excluding text dim
+    STATE_DIM = 33  # state dim produced from your build_state, excluding text dim
 
     # ObservationFromGrid, same as the one in xml
     GRID_MIN = {"x": -12, "y": -1, "z": -12}
     GRID_MAX = {"x": 12, "y": 1, "z": 12}
 
     # custom rewards
-    CORRECT_BREAK_REWARD = 80.0
+    CORRECT_BREAK_REWARD = 50.0
     WRONG_BREAK_PENALTY = -25.0
 
     MAX_ATTACK_RANGE = 4.0
@@ -79,17 +79,19 @@ class Task(BaseTask):
         self.current_tool_action = None
         self.text_model = SentenceTransformer(self.TEXT_MODEL_NAME)
         self.current_instruction_embedding = [0.0] * self.TEXT_MODEL_DIM
-        self.current_episode = 0
+        self.current_episode = 0  # manaully adjust starting episode if continuing training from checkpoint (check # of rows in monitor.csv)
         self.select_correct_tool_once = False
         self.reached_once = False
         self.penalized_wrong_breaks = set()
         self.embedding_cache = {}
+        self.eval = False
 
     def reset(self, instruction=None, eval_mode=False):
         self.current_tool_action = None
         self.select_correct_tool_once = False
         self.reached_once = False
         self.penalized_wrong_breaks = set()
+        self.eval = eval_mode
 
         if instruction is None:  # randomly samples an instruction during trianing
             self.current_episode += 1
@@ -105,12 +107,14 @@ class Task(BaseTask):
 
     def choose_target(self):
         # let each target run for some consecutive episodes
-        if self.current_episode < 2500:
+        if self.current_episode < 3500:
             self.TARGET_EPISODE_BATCH = 20
-        elif self.current_episode < 3500:
+        elif self.current_episode < 4500:
             self.TARGET_EPISODE_BATCH = 10
-        else:
+        elif self.current_episode < 5500:
             self.TARGET_EPISODE_BATCH = 5
+        else:
+            self.TARGET_EPISODE_BATCH = 1
 
         target_idx = (self.current_episode // self.TARGET_EPISODE_BATCH) % len(self.TARGETS)
         return self.TARGETS[target_idx]
@@ -150,16 +154,37 @@ class Task(BaseTask):
         ]
         zs = layout[self.current_episode % len(layout)]
 
-        # agent_x = random.choice([5.5, 6.5, 7.5])
-        # agent_z = random.choice([5.5, 6.5, 7.5])
+        x_z_layout = [
+            [(8, 1),
+            (11, 6),
+            (8, 11),],
+            [(8, 11),
+            (8, 1),
+            (11, 6),],
+            [(11, 6),
+            (8, 11),
+            (8, 1),],
+        ]
+        xz = x_z_layout[self.current_episode % len(x_z_layout)]
+
+        if self.eval:
+            xz = random.choice(x_z_layout)
+
+        agent_x = random.choice([1.5])
+        agent_z = random.choice([6.5])
+        agent_yaw = random.choice([270])
 
         return (
                 base_xml
-                .replace("__DIAMOND_Z__", str(zs[0]))
-                .replace("__LOG_Z__", str(zs[1]))
-                .replace("__CLAY_Z__", str(zs[2]))
-                # .replace("__AGENT_X__", str(agent_x))
-                # .replace("__AGENT_Z__", str(agent_z))
+                .replace("__DIAMOND_Z__", str(xz[0][1]))
+                .replace("__LOG_Z__", str(xz[1][1]))
+                .replace("__CLAY_Z__", str(xz[2][1]))
+                .replace("__DIAMOND_X__", str(xz[0][0]))
+                .replace("__LOG_X__", str(xz[1][0]))
+                .replace("__CLAY_X__", str(xz[2][0]))
+                .replace("__AGENT_X__", str(agent_x))
+                .replace("__AGENT_Z__", str(agent_z))
+                .replace("__AGENT_YAW__", str(agent_yaw))
             )
 
     def build_state(self, info_dict):
@@ -168,7 +193,9 @@ class Task(BaseTask):
         # agent camera feature
         yaw = float(info_dict.get("Yaw", 0))
         pitch = float(info_dict.get("Pitch", 0))
-        agent_features = [yaw / 180.0, pitch / 90.0]
+        agent_x = float(info_dict.get("XPos", 0))
+        agent_z = float(info_dict.get("ZPos", 0))
+        agent_features = [yaw / 180.0, pitch / 90.0, agent_x / 12.0, agent_z / 12.0]
 
         diamond_ore = self.find_nearest_block(info_dict, "diamond_ore")
         log = self.find_nearest_block(info_dict, "log")
@@ -178,14 +205,15 @@ class Task(BaseTask):
         for target in [diamond_ore, log, clay]:
             if target is not None:
                 target_features.extend([
+                    target["x"] / 12.0,
+                    target["z"] / 12.0,
                     target["dx"] / 12.0,
-                    target["dy"] / 5.0,
                     target["dz"] / 12.0,
                     target["distance"] / 17.0,
                     target["yaw_error"] / 180.0,
                 ])
             else:
-                target_features.extend([0.0, 0.0, 0.0, 0.0, 0.0])
+                target_features.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
         # direct obstacle relative to the camera angle
         fx, fz = self.yaw_to_direction(yaw)
@@ -229,7 +257,7 @@ class Task(BaseTask):
     def shape_reward(self, raw_reward, prev_info, curr_info, action, step):
         # additional reward logic
         reward = float(raw_reward)
-        reward -= 0.01  # global penalty
+        reward -= 0.05  # global penalty
         done = False
         metrics = {}  # saving agent stats for debug purposes, not used
 
@@ -245,21 +273,25 @@ class Task(BaseTask):
         # win condition (collect drop item)
         target_item = self.TARGET_DROP_ITEM[self.current_target]
         if self.inventory_contains(curr_info, target_item):
+            steps_bonus = max(0.0, 30.0 - step) * 1.5  # bonus for finishing early
+            reward += steps_bonus
             reward += self.CORRECT_BREAK_REWARD
 
             done = True
             return reward, done, metrics
 
+        # reward for making an attacking when it should
+        if self.los_matches_target(prev_info):
+            if action == self.ATTACK_ACTION:
+                if not self.reached_once:  
+                    reward += 5.0
+                    self.reached_once = True
+            else:
+                reward -= 0.5
+        
         # attack reward/penalty
-        # target_ahead = self.block_ahead_matches_target(prev_info, max_dist=int(self.MAX_ATTACK_RANGE))
-        # if action == self.ATTACK_ACTION:
-        #     if target_ahead:
-        #         reward += 0.5
-        #     else:
-        #         reward -= 0.3
-
         if action == self.ATTACK_ACTION:
-            if self.los_matches_target(prev_info):  # this is win condition, reward already applied
+            if self.los_matches_target(prev_info):  # reward already applied
                 reward += 0.0
             elif self.los_matches_wrong_target(prev_info):  # breaking the wrong target
                 reward -= 2.0
@@ -290,20 +322,6 @@ class Task(BaseTask):
             else:
                 reward -= 0.5
 
-        # avoid pit
-        # yaw = float(prev_info.get("Yaw", 0))
-        # fx, fz = self.yaw_to_direction(yaw)
-        # lx, lz = fz, -fx
-        # rx, rz = -fz, fx
-        # if action == self.FORWARD_ACTION and self.pit_in_direction(prev_info, fx, fz):
-        #     # forward into pit penalty
-        #     reward -= 1.0
-        # if action == 3 and self.pit_in_direction(prev_info, lx, lz):
-        #     # strafe into pit penalty
-        #     reward -= 1.0
-        # if action == 4 and self.pit_in_direction(prev_info, rx, rz):
-        #     reward -= 1.0
-
         prev_target = self.find_nearest_block(prev_info, self.current_target)
         curr_target = self.find_nearest_block(curr_info, self.current_target)
         if curr_target is None or prev_target is None:
@@ -327,21 +345,25 @@ class Task(BaseTask):
             reward += 1.2 * self.clamp(distance_progress, -1.0, 1.0)
 
         # penalty for moving away
-        if action == self.FORWARD_ACTION and prev_yaw > 75.0:
+        if action == self.FORWARD_ACTION and prev_yaw > 95.0:
             reward -= 0.15
 
-        # penalty for turning when already facing the target
-        if action in self.TURN_ACTIONS and prev_yaw < 25.0:
-            reward -= 0.10
+        # penalty for turning/strafing when already facing the target
+        if self.get_los_type(prev_info) == self.current_target:
+            # if already facing the target, penalize turning/strafing
+            if action in self.TURN_ACTIONS + [3, 4]:
+                reward -= 0.3
 
-        # one time reward when ready to attack
-        # if target_ahead and curr_yaw <= 35.0:
-        #     if not self.reached_once:
-        #         reward += 8.0
-        #         self.reached_once = True
-        if self.los_matches_target(prev_info) and not self.reached_once:
-            reward += 2.0
-            self.reached_once = True
+            # if already facing the target, penalize non move forward action
+            if not self.los_in_range(prev_info):
+                if action == self.FORWARD_ACTION:
+                    reward += 0.1
+                else:  
+                    reward -= 0.3
+
+        # if action in self.TURN_ACTIONS and prev_yaw < 25.0:
+        #     reward -= 0.10
+
 
         return reward, done, metrics
 

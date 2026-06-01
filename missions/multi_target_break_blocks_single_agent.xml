@@ -34,20 +34,30 @@
                 <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
                 <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
 
-                <DrawCuboid x1="11" y1="4" z1="0" x2="11" y2="4" z2="12" type="fence" />
+                <!-- <DrawCuboid x1="11" y1="4" z1="0" x2="11" y2="4" z2="12" type="fence" /> -->
                 
                 <!-- Tool-task target blocks. -->
                 <!-- Pickaxe target. -->
-                <DrawCuboid x1="11" y1="5" z1="__DIAMOND_Z__" x2="11" y2="5" z2="__DIAMOND_Z__" type="diamond_ore" />
-                <DrawBlock x="11" y="4" z="__DIAMOND_Z__" type="fence" />
+                <!-- <DrawCuboid x1="11" y1="5" z1="__DIAMOND_Z__" x2="11" y2="5" z2="__DIAMOND_Z__" type="diamond_ore" /> -->
+                <!-- <DrawBlock x="11" y="4" z="__DIAMOND_Z__" type="fence" /> -->
 
                 <!-- Axe target. -->
-                <DrawCuboid x1="11" y1="5" z1="__LOG_Z__" x2="11" y2="5" z2="__LOG_Z__" type="log" />
-                <DrawBlock x="11" y="4" z="__LOG_Z__" type="fence" />
+                <!-- <DrawCuboid x1="11" y1="5" z1="__LOG_Z__" x2="11" y2="5" z2="__LOG_Z__" type="log" /> -->
+                <!-- <DrawBlock x="11" y="4" z="__LOG_Z__" type="fence" /> -->
 
                 <!-- Shovel target. -->
-                <DrawCuboid x1="11" y1="5" z1="__CLAY_Z__" x2="11" y2="5" z2="__CLAY_Z__" type="clay" />
-                <DrawBlock x="11" y="4" z="__CLAY_Z__" type="fence" />
+                <!-- <DrawCuboid x1="11" y1="5" z1="__CLAY_Z__" x2="11" y2="5" z2="__CLAY_Z__" type="clay" /> -->
+                <!-- <DrawBlock x="11" y="4" z="__CLAY_Z__" type="fence" /> -->
+                                <DrawCuboid x1="__DIAMOND_X__" y1="5" z1="__DIAMOND_Z__" x2="__DIAMOND_X__" y2="5" z2="__DIAMOND_Z__" type="diamond_ore" />
+                <DrawBlock x="__DIAMOND_X__" y="4" z="__DIAMOND_Z__" type="fence" />
+
+                <!-- Axe target. -->
+                <DrawCuboid x1="__LOG_X__" y1="5" z1="__LOG_Z__" x2="__LOG_X__" y2="5" z2="__LOG_Z__" type="log" />
+                <DrawBlock x="__LOG_X__" y="4" z="__LOG_Z__" type="fence" />
+
+                <!-- Shovel target. -->
+                <DrawCuboid x1="__CLAY_X__" y1="5" z1="__CLAY_Z__" x2="__CLAY_X__" y2="5" z2="__CLAY_Z__" type="clay" />
+                <DrawBlock x="__CLAY_X__" y="4" z="__CLAY_Z__" type="fence" />
 
 
                 <!-- Far visual landmarks outside observation range. -->
@@ -65,8 +75,8 @@
 
         <AgentStart>
             <!-- <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="27" /> -->
-            <Placement x="5.5" y="4.0" z="6.5" yaw="270" pitch="0" />
-            <!-- <Placement x="__AGENT_X__" y="4.0" z="__AGENT_Z__" yaw="270" pitch="27" /> -->
+            <!-- <Placement x="5.5" y="4.0" z="6.5" yaw="270" pitch="0" /> -->
+            <Placement x="__AGENT_X__" y="4.0" z="__AGENT_Z__" yaw="__AGENT_YAW__" pitch="0" />
 
             <Inventory>
                 <InventoryItem slot="0" type="diamond_pickaxe" quantity="1" />
@@ -110,8 +120,8 @@
             <RewardForSendingCommand reward="-0.01" />
 
             <VideoProducer want_depth="false">
-                <Width>400</Width>
-                <Height>300</Height>
+                <Width>200</Width>
+                <Height>150</Height>
             </VideoProducer>
         </AgentHandlers>
     </AgentSection>
