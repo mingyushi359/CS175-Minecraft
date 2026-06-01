@@ -169,7 +169,7 @@ python train/train_ppo.py --mission missions/multi_target_single_agent.xml --epi
 
 |"go to the pig"|"go to the log"|"go to the emerald"|
 | -------- | -------- | -------- |
-|<img width="160" height="120" alt="episode_0_reward_48 05" src="imgs/navigation/pig.gif" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="imgs/navigation/log.gif" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="imgs/navigation/emerald.gif" />|
+|<img width="160" height="120" alt="episode_0_reward_48 05" src="imgs/navigation/pig.gif" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="imgs/navigation/wood_log.gif" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="imgs/navigation/emerald.gif" />|
 
 #### Example learning plot
 
