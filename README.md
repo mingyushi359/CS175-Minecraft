@@ -74,13 +74,13 @@ python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --
 
 `--model-path` is the path where the trained models and logs will be saved
 
-`--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` or `multi_target_navigation` as an example
+`--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` or `multi_target_navigation` for examples
 
 For multi-target tasks:
 
 `--projection` is an optional argument for enabling the projection layer that projects the text instruction through trainable MLP instead of passing the raw encoded embedding into the PPO network
 
-`--random` is an optinal argument for enabling randomized mission xml generation per episode. 
+`--random` is an optinal argument for enabling randomized mission xml generation per episode. Need to define function `make_random_mission_xml` in task-py and add `<MissionQuitCommands/>` under `<AgentHandlers>` in your mission xml. See `multi_target_break_blocks.py` for examples
 
 `--load-model` loads an existing checkpoint and continues to train on top
 
@@ -117,11 +117,19 @@ For multi-target tasks:
 
 `--projection` need to be consistent with training
 
-`--random` need to be consistent with training
+`--random` usually same as training, depends on the mission xml setup
 
 `--instruction` need to pass in the text instruction for multi-target evaluation
 
-In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation. Not ideal, but performs better is some cases
+---
+## Known Issues
+### 1. Empty info returned by Malmo
+Current RL implementation rely soley on info returned by Malmo for state info such as grid observations. However, Malmo frequently return empty info dict possibly due to Python-Minecraft synchronization issue related to Malmo. The current workaround is simply to return the previous state and skip reward shaping for that step.
+
+*Note that the very first observation info only becomes available after executing the first action/step, so a env.step(0), usually a move forward action depending on your custom action space, is added at the very begining of each reset to obtain the info state.
+
+### 2. Minecraft instance become unresponsive due to per-episode xml reloading implementation
+The current per-episode xml reloading works by manually closing and re-initialize current Malmo environment in order to be able to reload a different xml (generated from `make_random_mission_xml` function defined in your task-py file, you decide how to modify the xml) for generalized learning. However, this leads to a weird issue of each step's `terminated=True` or `truncated=True` to not be able to end the episode early, and would have to wait for the Malmo's internal timer `timeLimitMs`, defined in the mission xml, to expire to end the episode. The workaround is to manually send a hidden `quit` action (defined only in Malmo env init, don't ever add it to your custom action space) and tells Malmo to end the episode. However, this again leads to another Python-Minecraft synchronization issue where if the `quit` command is sent too quickly, it would cause the training to end prematurely or cause the Minecraft instance to crash (unresponsive). The "fix" for this issue is to simply add delay for each `quit` command so that the command would reach Malmo before the Python code calls reset. Though the delayed amount might depends on the performance on your machine (like your CPU, allocated RAM for Minecraft, etc.), but I've not done thorough testing on this so I have no idea. Or it might be due to the total number of Malmo env resets.
 
 ---
 
@@ -139,12 +147,12 @@ python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episod
 ```
 
 #### Example Recording
-<img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
-<img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
+<img width="160" height="120" alt="episode_0_reward_51 46" src="imgs/mob_chase/pig_1.gif" />
+<img width="160" height="120" alt="episode_1_reward_47 32" src="imgs/mob_chase/pig_2.gif" />
 
 ---
 
-### multi_target_navigation.py (multi-target)
+### multi_target_navigation.py (multi-target, fixed layout)
 #### Training Command
 
 ```bash
@@ -161,29 +169,40 @@ python train/train_ppo.py --mission missions/multi_target_single_agent.xml --epi
 
 |"go to the pig"|"go to the log"|"go to the emerald"|
 | -------- | -------- | -------- |
-|<img width="160" height="120" alt="episode_0_reward_48 05" src="https://github.com/user-attachments/assets/b13984b9-0120-4780-ba5a-03c337b70104" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="https://github.com/user-attachments/assets/a3f11098-c3dc-4157-89d9-142b889c8799" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="https://github.com/user-attachments/assets/51485fcb-8668-44c0-9889-7afb225e43d3" />|
+|<img width="160" height="120" alt="episode_0_reward_48 05" src="imgs/navigation/pig.gif" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="imgs/navigation/log.gif" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="imgs/navigation/emerald.gif" />|
 
 #### Example learning plot
 
-<img width="1500" height="750" alt="reward_curve" src="https://github.com/user-attachments/assets/8dbd5fe0-482e-4537-a261-0c19e195bdca" />
-<img width="1500" height="750" alt="steps_curve" src="https://github.com/user-attachments/assets/3b2fc9f8-9191-44db-9f8f-59e6736a1284" />
+<img width="1500" height="750" alt="reward_curve" src="imgs/navigation/reward.png" />
+<img width="1500" height="750" alt="steps_curve" src="imgs/navigation/step.png" />
 
 This run was from the "Add obstacle states" commit. The best model appears to be the 57500_steps checkpoint, and the learning started to drift away after that
 
 ---
 
-### multi_target_break_blocks.py (multi-target)
-#### Training Command (with randomly shuffle target block layout)
+### multi_target_break_blocks.py (multi-target, shuffled layout)
+#### Training Command
+The per-episode xml reloading implementation causes Malmo to lag early or even crash during long runs. It's recommended to only run up to 175k (or even fewer) steps, and restart Malmo and continue from the previous checkpoint.
 
-Training with batch of 20
+Run 1:
 ```bash
-python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 400000 --model-path ppo_logs_break_blocks/out12/ --task-py train/tasks/multi_target_break_blocks.py --projection --random --lr 3e-4 --n-steps 1024 --batch-size 128 > ppo_logs_break_blocks/out12/out.txt 2>&1
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 175000 --model-path ppo_logs_break_blocks/out20/ --task-py train/tasks/multi_target_break_blocks.py --projection --random --lr 3e-4 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out20/out.txt 2>&1
 ```
+
+Run 2, fine-tune from the 175k checkpoint:
+- (required) In task-py manaully set `self.current_episode` to however many episode completed in the previous run (check # rows in monitor.csv)
+- `--n-steps` reduce from 2048 -> 1024
+- `--lr` reduce from 3e-4 to 1e-4
+
+```bash
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 175000 --model-path ppo_logs_break_blocks/out20_cont/ --task-py train/tasks/multi_target_break_blocks.py --load-model ppo_logs_break_blocks/out20/ppo_175000_steps.zip --projection --random --lr 3e-4 --n-steps 1024 --batch-size 128 > ppo_logs_break_blocks/out20_cont/out.txt 2>&1
+```
+
 
 #### Evaluation Command
 
 ```bash
-python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 50 --task-py train/tasks/multi_target_break_blocks.py --model-path ppo_logs_break_blocks/out09/ppo_150000_steps.zip --projection --random --eval --episodes 5 --instruction "break the diamond ore" 
+python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 50 --task-py train/tasks/multi_target_break_blocks.py --model-path ppo_logs_break_blocks/out19/ppo_150000_steps.zip --projection --random --eval --episodes 5 --instruction "break the diamond ore" 
 ```
 
 ---
