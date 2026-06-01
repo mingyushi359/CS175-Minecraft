@@ -210,14 +210,16 @@ class MalmoStructuredEnv(gym.Env):
 
         terminated = bool(done or task_done)
         truncated = bool(self.args.episodemaxsteps > 0 and self.steps >= self.args.episodemaxsteps)
-        if (task_done or truncated) and not done and self.quit_action_index is not None:
-            try:  # manually calling quit action when done=True
-                self.env.step(self.quit_action_index)
-                # gives time for malmo to quit before reset
-                # you might want to increase delay if the minecraft window ever gets frozen or unresponsive
-                time.sleep(0.25 + 0.05 * (self.steps // 40000))
-            except Exception as e:
-                print(f"Warning: failed to send Malmo quit command: {e}")
+
+        if self.args.random:
+            if (task_done or truncated) and not done and self.quit_action_index is not None:
+                try:  # manually calling quit action when done=True
+                    self.env.step(self.quit_action_index)
+                    # gives time for malmo to quit before reset
+                    # you might want to increase delay if the minecraft window ever gets frozen or unresponsive
+                    time.sleep(0.25 + 0.06 * (self.steps // 30000))
+                except Exception as e:
+                    print(f"Warning: failed to send Malmo quit command: {e}")
 
         if "target" not in info_dict:
             info_dict["target"] = "N/A"
