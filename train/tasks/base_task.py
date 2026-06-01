@@ -80,6 +80,9 @@ class BaseTask:
         if not board:
             return None
         
+        agent_x = float(info_dict.get("XPos", 0.0))
+        agent_z = float(info_dict.get("ZPos", 0.0))
+        
         x_count = self.GRID_MAX["x"] - self.GRID_MIN["x"] + 1
         y_count = self.GRID_MAX["y"] - self.GRID_MIN["y"] + 1
         z_count = self.GRID_MAX["z"] - self.GRID_MIN["z"] + 1
@@ -105,7 +108,11 @@ class BaseTask:
             yaw_error = self.yaw_error_to_target(agent_yaw, dx, dz)
 
             if best is None or distance < best["distance"]:
+                rel_x = self.GRID_MIN["x"] + int(x_idx)
+                rel_z = self.GRID_MIN["z"] + int(z_idx)
                 best = {
+                    "x": agent_x + rel_x,
+                    "z": agent_z + rel_z,
                     "dx": dx,
                     "dy": dy,
                     "dz": dz,
