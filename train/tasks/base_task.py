@@ -70,6 +70,7 @@ class BaseTask:
                     "dz": dz,
                     "distance": distance, 
                     "yaw_error": yaw_error,
+                    "life": float(entity.get("life", 10.0)),
                     }
         return best
     
