@@ -63,6 +63,8 @@ class BaseTask:
             if best is None or distance < best["distance"]:
                 # returns the nearest entity's distance and camera angle difference
                 best = {
+                    "x": float(entity.get("x", 0.0)),
+                    "z": float(entity.get("z", 0.0)),
                     "dx": dx,
                     "dy": dy,
                     "dz": dz,
