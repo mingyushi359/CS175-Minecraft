@@ -159,3 +159,20 @@ python train/train_dqn.py --mission missions/reach_target_single_agent.xml --eva
 ## Miscellaneous
 
 To change Minecraft memory allocation, go to the downloaded `MalmoPlatform/Minecraft/build.gradle`, locate the `exec.jvmArgs` on line 51, and change the `"-Xmx2G"` value to whatever (e.g. `"-Xmx4G"` for 4GB of memory)
+
+
+
+
+## Personal training for farming:
+
+create virtual environment:
+
+conda activate malmo
+
+
+change java version:
+export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+export PATH="$JAVA_HOME/bin:$PATH"
+
+run training:
+python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 300000   --model-path ppo_logs/place_item_test/   --task-py train/tasks/place_item_farming.py   --projection   > ppo_logs/place_item_test/out.txt

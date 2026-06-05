@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Mission xmlns="http://ProjectMalmo.microsoft.com"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <About>
+        <Summary>Instruction-conditioned place item / planting task</Summary>
+    </About>
+
+    <ModSettings>
+        <MsPerTick>20</MsPerTick>
+    </ModSettings>
+
+    <ServerSection>
+        <ServerInitialConditions>
+            <Time>
+                <StartTime>1000</StartTime>
+                <AllowPassageOfTime>false</AllowPassageOfTime>
+            </Time>
+            <Weather>clear</Weather>
+            <AllowSpawning>false</AllowSpawning>
+        </ServerInitialConditions>
+
+        <ServerHandlers>
+            <FlatWorldGenerator generatorString="3;7,2x3,2;1;" forceReset="true" />
+
+            <DrawingDecorator>
+                <!-- Clear arena -->
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="6" z2="12" type="air" />
+                <DrawCuboid x1="0" y1="3" z1="0" x2="12" y2="3" z2="12" type="grass" />
+
+                <!-- Fence boundary -->
+                <DrawCuboid x1="0" y1="4" z1="0" x2="12" y2="5" z2="0" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="5" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="5" z2="12" type="spruce_fence" />
+                <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="5" z2="12" type="spruce_fence" />
+
+                <!-- Farm area: farmland around water -->
+                <!-- Ground base -->
+                <DrawBlock x="6" y="2" z="6" type="dirt" />
+
+                <!-- Water source inside the ground level -->
+                <DrawBlock x="6" y="3" z="6" type="water" />
+
+                <!-- Fence above the water -->
+                <DrawBlock x="6" y="4" z="6" type="spruce_fence" />
+
+                <!-- 5x5 farmland patch around water, excluding center water block -->
+
+                <!-- center water at x=6 z=6 -->
+
+                <DrawBlock x="5" y="3" z="7" type="farmland" />
+                <DrawBlock x="6" y="3" z="7" type="farmland" />
+                <DrawBlock x="7" y="3" z="7" type="farmland" />
+            </DrawingDecorator>
+
+            <ServerQuitFromTimeUp timeLimitMs="30000" />
+            <ServerQuitWhenAnyAgentFinishes />
+        </ServerHandlers>
+    </ServerSection>
+
+    <AgentSection mode="Survival">
+        <Name>Agent0</Name>
+
+        <AgentStart>
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="30" />
+
+            <Inventory>
+                <InventoryItem slot="0" type="wheat_seeds" quantity="64" />
+                <InventoryItem slot="1" type="carrot" quantity="64" />
+                <InventoryItem slot="2" type="potato" quantity="64" />
+                <InventoryItem slot="3" type="dirt" quantity="64" />
+            </Inventory>
+        </AgentStart>
+
+        <AgentHandlers>
+            <DiscreteMovementCommands>
+                <ModifierList type="allow-list">
+                    <command>move</command>
+                    <command>turn</command>
+                    <command>strafe</command>
+                </ModifierList>
+            </DiscreteMovementCommands>
+
+            <InventoryCommands>
+                <ModifierList type="allow-list">
+                    <command>hotbar.1</command>
+                    <command>hotbar.2</command>
+                    <command>hotbar.3</command>
+                </ModifierList>
+            </InventoryCommands>
+
+            <HumanLevelCommands>
+                <ModifierList type="allow-list">
+                    <command>use</command>
+                </ModifierList>
+            </HumanLevelCommands>
+
+            <ObservationFromFullStats />
+
+            <ObservationFromGrid>
+                <Grid absoluteCoords="false" name="board">
+                    <min x="-8" y="-1" z="-8" />
+                    <max x="8" y="1" z="8" />
+                </Grid>
+            </ObservationFromGrid>
+
+            <ObservationFromRay />
+            <ObservationFromHotBar />
+
+            <RewardForSendingCommand reward="-0.01" />
+
+            <VideoProducer want_depth="false">
+                <Width>160</Width>
+                <Height>120</Height>
+            </VideoProducer>
+        </AgentHandlers>
+    </AgentSection>
+</Mission>
