@@ -114,8 +114,8 @@ class Task(BaseTask):
     END_ON_WATER = True
     WATER_PENALTY = -5.0
 
-    WRONG_PLANT_PENALTY = -3.0
-    FAILED_FULL_FARM_PENALTY = -40.0
+    WRONG_PLANT_PENALTY = -10.0
+    FAILED_FULL_FARM_PENALTY = -20.0
 
     WRONG_SLOT_USE_PENALTY = -0.5
     BAD_USE_PENALTY = -0.7
@@ -417,14 +417,14 @@ class Task(BaseTask):
             reward += self.NO_OP_WITH_GOAL_PENALTY
             self.debug_event("noop_with_goal")
 
-        can_use = self.can_use_available_farmland_now(curr_info)
-
         prev_can_use = self.can_use_available_farmland_now(prev_info) if has_prev_info else 0.0
-        curr_can_use = can_use
+        curr_can_use = self.can_use_available_farmland_now(curr_info)
 
-        if (prev_can_use > 0.0 and action != self.USE_ACTION and old_slot == target_slot):
+        prev_target_goal_usable = (has_prev_info and self.is_target_goal_usable_now(prev_info, goal_world_for_step))
+
+        if (prev_target_goal_usable and action != self.USE_ACTION and old_slot == target_slot):
             reward += self.MISSED_USE_CHANCE_PENALTY
-            self.debug_event("missed_use_chance")
+            self.debug_event("missed_use_chance_target_goal")
 
         if prev_can_use <= 0.0 and curr_can_use > 0.0:
             reward += self.BECAME_CAN_USE_REWARD
@@ -436,7 +436,7 @@ class Task(BaseTask):
         if curr_can_use > 0.0 and self.selected_slot == target_slot:
             self.debug_event("can_use_correct_slot_seen")
 
-        if can_use > 0.0 and self.selected_slot == target_slot:
+        if curr_can_use > 0.0 and self.selected_slot == target_slot:
             reward += self.READY_WITH_CORRECT_SLOT_REWARD
             self.debug_event("ready_correct_slot")
 
@@ -581,7 +581,7 @@ class Task(BaseTask):
 
                         reward += self.WRONG_SLOT_USE_PENALTY
                         self.current_goal_world = None
-                self.debug_print(
+                '''self.debug_print(
                     f"[DEBUG_USE_CHECK] "
                     f"can_use_before={can_use_before} "
                     f"target_world={target_world} "
@@ -593,7 +593,7 @@ class Task(BaseTask):
                     f"crop_appeared={crop_appeared} "
                     f"ready_before={ready_before} "
                     f"actual_planted={actual_planted}"
-                )
+                ) '''
         # Keep memory updated from the latest visible local observation.
         self.update_farmland_memory(curr_info)
 
@@ -618,7 +618,7 @@ class Task(BaseTask):
                 print("done_memory_all_correct")
                 self.debug_event("done_memory_all_correct")
             else:
-                reward += self.FAILED_FULL_FARM_PENALTY
+                # reward += self.FAILED_FULL_FARM_PENALTY
                 metrics["task_success"] = False
                 metrics["farm_filled_but_wrong"] = True
                 print("done_memory_has_wrong")
@@ -641,7 +641,7 @@ class Task(BaseTask):
 
         metrics["target"] = self.current_target
         metrics["selected_slot"] = self.selected_slot
-        metrics["can_use"] = can_use
+        metrics["curr_can_use"] = curr_can_use
 
         metrics["success_count"] = correct_count
         metrics["target_planted"] = correct_count
@@ -692,7 +692,6 @@ class Task(BaseTask):
                 f"reward={reward:.2f} "
                 f"target={self.current_target} "
                 f"slot={self.selected_slot}/{target_slot} "
-                f"can_use={can_use} "
                 f"goal={self.current_goal_world} "
                 f"planted={correct_count} "
                 f"wrong={wrong_count} "
@@ -1530,6 +1529,16 @@ class Task(BaseTask):
         dz = lz - gz
 
         return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    def is_target_goal_usable_now(self, info_dict, goal_world):
+        if not info_dict or goal_world is None:
+            return False
+
+        if self.can_use_available_farmland_now(info_dict) <= 0.0:
+            return False
+
+        targeted_world = self.get_targeted_farmland_world(info_dict)
+        return targeted_world == goal_world
 
     # Debug functions - do not affect agent state or reward
     def debug_event(self, name, amount=1):
