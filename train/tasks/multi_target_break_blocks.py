@@ -5,13 +5,11 @@ from tasks.base_task import BaseTask
 
 class Task(BaseTask):
     TASK_ID = 3
-    TARGETS = ["diamond_ore","log","clay"]
-    TARGET_EPISODE_BATCH = 20  # run 20 consecutive episodes for each target
+    TARGETS = ["diamond_ore", "log", "clay"]
+    TARGET_EPISODE_BATCH = 3  # run 3 consecutive episodes for each target-pair combination
 
     CUSTOM_ACTIONS = [
         "move 1",
-        "turn 1",
-        "turn -1",
         "strafe 1",
         "strafe -1",
         "hotbar.1 1",  # pickaxe
@@ -37,10 +35,23 @@ class Task(BaseTask):
         "clay": ["clay"],
     }
 
+    # balanced target-layout combination for better generalization and even learning
+    TARGET_LAYOUT_PAIRS = [
+        ("clay", 0),
+        ("diamond_ore", 1),
+        ("log", 2),
+        ("diamond_ore", 0),
+        ("log", 1),
+        ("clay", 2),
+        ("log", 0),
+        ("clay", 1),
+        ("diamond_ore", 2),
+    ]
+
     REQUIRED_TOOL_ACTION = {
-        "diamond_ore": 5,  # hotbar.1 / pickaxe
-        "log": 6,          # hotbar.2 / axe
-        "clay": 7,       # hotbar.3 / shovel
+        "diamond_ore": 3,  # hotbar.1 / pickaxe
+        "log": 4,          # hotbar.2 / axe
+        "clay": 5,       # hotbar.3 / shovel
     }
 
     TARGET_DROP_ITEM = {
@@ -66,11 +77,11 @@ class Task(BaseTask):
     MAX_ATTACK_RANGE = 4.0
     MIN_ATTACK_RANGE = 0.0
 
-    TURN_ACTIONS = [1, 2]  # left, right
+    TURN_ACTIONS = []  # left, right
     FORWARD_ACTION = 0
-    ATTACK_ACTION = 8
-    MOVEMENT_ACTIONS = [0, 3, 4]  # forward, strafe left/right
-    TOOL_ACTIONS = [5, 6, 7]
+    ATTACK_ACTION = 6
+    MOVEMENT_ACTIONS = [0, 1, 2]  # forward, strafe left/right
+    TOOL_ACTIONS = [3, 4, 5]
 
     def __init__(self):
         super().__init__()
@@ -85,6 +96,8 @@ class Task(BaseTask):
         self.penalized_wrong_breaks = set()
         self.embedding_cache = {}
         self.eval = False
+        self.current_layout_idx = 0
+        self.pair_bag = []
 
     def reset(self, instruction=None, eval_mode=False):
         self.current_tool_action = None
@@ -94,8 +107,8 @@ class Task(BaseTask):
         self.eval = eval_mode
 
         if instruction is None:  # randomly samples an instruction during trianing
-            self.current_episode += 1
             self.current_target = self.choose_target()
+            self.current_episode += 1
             template = random.choice(self.INSTRUCTION_TEMPLATE)
             target_alias = random.choice(self.INSTRUCTION_TARGET_ALIASES[self.current_target])
             self.current_instruction = template.format(target_alias)
@@ -107,17 +120,31 @@ class Task(BaseTask):
 
     def choose_target(self):
         # let each target run for some consecutive episodes
-        if self.current_episode < 3500:
-            self.TARGET_EPISODE_BATCH = 20
-        elif self.current_episode < 4500:
-            self.TARGET_EPISODE_BATCH = 10
-        elif self.current_episode < 5500:
-            self.TARGET_EPISODE_BATCH = 5
-        else:
-            self.TARGET_EPISODE_BATCH = 1
+        # if self.current_episode < 4000:
+        #     self.TARGET_EPISODE_BATCH = 20
+        # elif self.current_episode < 5000:
+        #     self.TARGET_EPISODE_BATCH = 10
+        # elif self.current_episode < 6000:
+        #     self.TARGET_EPISODE_BATCH = 5
+        # else:
+        #     self.TARGET_EPISODE_BATCH = 3
 
-        target_idx = (self.current_episode // self.TARGET_EPISODE_BATCH) % len(self.TARGETS)
-        return self.TARGETS[target_idx]
+        # target_idx = (self.current_episode // self.TARGET_EPISODE_BATCH) % len(self.TARGETS)
+        # return self.TARGETS[target_idx]
+        offset = self.current_episode // (self.TARGET_EPISODE_BATCH * len(self.TARGET_LAYOUT_PAIRS)) % len(self.TARGET_LAYOUT_PAIRS)
+        pair_idx = ((self.current_episode // self.TARGET_EPISODE_BATCH) + offset) % len(self.TARGET_LAYOUT_PAIRS)
+
+        if len(self.pair_bag) == 0:
+            pairs = list(range(len(self.TARGET_LAYOUT_PAIRS)))
+            random.shuffle(pairs)
+
+            self.pair_bag = []
+            for p in pairs:
+                self.pair_bag.extend([p] * self.TARGET_EPISODE_BATCH)
+        pair_idx = self.pair_bag.pop()
+
+        self.current_layout_idx = self.TARGET_LAYOUT_PAIRS[pair_idx][1]
+        return self.TARGET_LAYOUT_PAIRS[pair_idx][0]
 
     def encode_instruction(self, text):
         # sentence transformer
@@ -147,30 +174,30 @@ class Task(BaseTask):
 
         # zs = [1, 6, 11]
         # random.shuffle(zs)
-        layout = [
-            [1, 6, 11],
-            [6, 11, 1],
-            [11, 1, 6],
-        ]
-        zs = layout[self.current_episode % len(layout)]
+        # layout = [
+        #     [1, 6, 11],
+        #     [11, 1, 6],
+        #     [6, 11, 1],
+        # ]
+        # zs = layout[self.current_episode % len(layout)]
 
         x_z_layout = [
-            [(8, 1),
+            [(11, 3),
             (11, 6),
-            (8, 11),],
-            [(8, 11),
-            (8, 1),
+            (11, 9),],
+            [(11, 9),
+            (11, 3),
             (11, 6),],
             [(11, 6),
-            (8, 11),
-            (8, 1),],
+            (11, 9),
+            (11, 3),],
         ]
-        xz = x_z_layout[self.current_episode % len(x_z_layout)]
+        xz = x_z_layout[self.current_layout_idx]
 
         if self.eval:
             xz = random.choice(x_z_layout)
 
-        agent_x = random.choice([1.5])
+        agent_x = random.choice([4.5])
         agent_z = random.choice([6.5])
         agent_yaw = random.choice([270])
 
@@ -229,9 +256,9 @@ class Task(BaseTask):
         obstacle_features = [front, back, left, right]
 
         tool_features = [
-            1.0 if self.current_tool_action == 5 else 0.0,  # pickaxe
-            1.0 if self.current_tool_action == 6 else 0.0,  # axe
-            1.0 if self.current_tool_action == 7 else 0.0,  # shovel
+            1.0 if self.current_tool_action == 3 else 0.0,  # pickaxe
+            1.0 if self.current_tool_action == 4 else 0.0,  # axe
+            1.0 if self.current_tool_action == 5 else 0.0,  # shovel
         ]
 
         # line of sight
@@ -273,6 +300,8 @@ class Task(BaseTask):
         # win condition (collect drop item)
         target_item = self.TARGET_DROP_ITEM[self.current_target]
         if self.inventory_contains(curr_info, target_item):
+            if self.current_tool_action == self.REQUIRED_TOOL_ACTION[self.current_target]:
+                reward += 10.0
             steps_bonus = max(0.0, 30.0 - step) * 1.5  # bonus for finishing early
             reward += steps_bonus
             reward += self.CORRECT_BREAK_REWARD
@@ -315,7 +344,7 @@ class Task(BaseTask):
 
             if action == self.REQUIRED_TOOL_ACTION[self.current_target]:
                 if not self.select_correct_tool_once:
-                    reward += 5.0
+                    reward += 10.0
                     self.select_correct_tool_once = True
                 else:
                     reward -= 0.1
@@ -336,13 +365,28 @@ class Task(BaseTask):
         distance_progress = prev_dist - curr_dist
         look_progress = prev_yaw - curr_yaw
 
+        # reward for recovering from the wrong target
+        if self.los_matches_wrong_target(prev_info):
+            if action in self.TOOL_ACTIONS:
+                reward -= 0.8
+            elif action in [1, 2]:  # strafe left/right
+                if distance_progress > 0:  # moving closer to the correct target
+                    reward += 0.3
+                else:
+                    reward -= 0.3
+            elif action == self.FORWARD_ACTION:
+                reward -= 0.3
+
         # reward for camera angle
         if action in self.TURN_ACTIONS:
             reward += 0.08 * self.clamp(look_progress / 30.0, -1.0, 1.0)
 
         # reward for moving closer
         if action in self.MOVEMENT_ACTIONS:
-            reward += 1.2 * self.clamp(distance_progress, -1.0, 1.0)
+            if distance_progress > 0:
+                reward += 1.2 * self.clamp(distance_progress, -1.0, 1.0)
+            else:
+                reward -= 0.25
 
         # penalty for moving away
         if action == self.FORWARD_ACTION and prev_yaw > 95.0:
@@ -351,7 +395,7 @@ class Task(BaseTask):
         # penalty for turning/strafing when already facing the target
         if self.get_los_type(prev_info) == self.current_target:
             # if already facing the target, penalize turning/strafing
-            if action in self.TURN_ACTIONS + [3, 4]:
+            if action in [1, 2]:
                 reward -= 0.3
 
             # if already facing the target, penalize non move forward action
