@@ -101,7 +101,10 @@ class Task(BaseTask):
     # Used only to normalize memory-count features. This does not need to equal the true total.
     MEMORY_COUNT_SCALE = 32.0
 
-    STEP_PENALTY = -0.01
+    BAD_USE_NOT_READY_PENALTY = -1.2
+    BAD_USE_NO_CONFIRM_PENALTY = -0.4
+
+    STEP_PENALTY = -0.03
     NO_OP_WITH_GOAL_PENALTY = -0.1
     COMPLETE_ALL_REWARD = 100.0
     BECAME_CAN_USE_REWARD = 0.1
@@ -140,7 +143,7 @@ class Task(BaseTask):
     UNNECESSARY_TURN_PENALTY = -0.08
     STUCK_EXTRA_PENALTY = -0.2
 
-    MISSED_USE_CHANCE_PENALTY = -1.2
+    MISSED_USE_CHANCE_PENALTY = -0.8
 
     USE_WHEN_READY_REWARD = 10.0
 
@@ -438,7 +441,13 @@ class Task(BaseTask):
             self.debug_event("ready_correct_slot")
 
         if prev_goal is not None and curr_goal is not None:
-            distance_progress = prev_goal["distance"] - curr_goal["distance"]
+            prev_los_dist = self.get_los_distance_to_goal(prev_info, goal_world_for_step) if has_prev_info else None
+            curr_los_dist = self.get_los_distance_to_goal(curr_info, goal_world_for_step)
+
+            if prev_los_dist is not None and curr_los_dist is not None:
+                distance_progress = prev_los_dist - curr_los_dist
+            else:
+                distance_progress = prev_goal["distance"] - curr_goal["distance"]
 
             if action in [4, 5] and distance_progress <= 0.01:
                 reward += self.BAD_STRAFE_NO_PROGRESS_PENALTY
@@ -522,7 +531,7 @@ class Task(BaseTask):
                 )
 
                 if not ready_before:
-                    reward += self.BAD_USE_PENALTY
+                    # reward += self.BAD_USE_NOT_READY_PENALTY
                     if can_use_before <= 0.0:
                         self.debug_event("use_fail_not_usable")
                     elif target_world is None:
@@ -531,12 +540,11 @@ class Task(BaseTask):
                         self.debug_event("use_fail_wrong_slot")
 
                 elif not actual_planted:
-                    reward += self.BAD_USE_PENALTY
+                    # reward += self.BAD_USE_NO_CONFIRM_PENALTY
                     self.debug_event("use_fail_no_plant_confirmed")
 
                 else:
                     reward += self.USE_WHEN_READY_REWARD
-                    reward += self.SUCCESSFUL_PLANT_REWARD
                     self.debug_event("use_when_ready")
                     self.debug_event("successful_plant_use")
 
@@ -573,6 +581,19 @@ class Task(BaseTask):
 
                         reward += self.WRONG_SLOT_USE_PENALTY
                         self.current_goal_world = None
+                self.debug_print(
+                    f"[DEBUG_USE_CHECK] "
+                    f"can_use_before={can_use_before} "
+                    f"target_world={target_world} "
+                    f"slot={self.selected_slot}/{target_slot} "
+                    f"prev_count={prev_selected_count} "
+                    f"curr_count={curr_selected_count} "
+                    f"inventory_decreased={inventory_decreased} "
+                    f"crop_after={crop_after} "
+                    f"crop_appeared={crop_appeared} "
+                    f"ready_before={ready_before} "
+                    f"actual_planted={actual_planted}"
+                )
         # Keep memory updated from the latest visible local observation.
         self.update_farmland_memory(curr_info)
 
@@ -1488,6 +1509,27 @@ class Task(BaseTask):
             self._step_obs_cache[key] = {}
 
         return self._step_obs_cache[key]
+    
+    def get_los_distance_to_goal(self, info_dict, goal_world):
+        """
+        Return distance from currently targeted LineOfSight block to goal farmland.
+        Lower means the crosshair is closer to the target block.
+        """
+        if not info_dict or goal_world is None:
+            return None
+
+        los_world = self.get_los_block_world(info_dict)
+        if los_world is None:
+            return None
+
+        gx, gy, gz = goal_world
+        lx, ly, lz = los_world
+
+        dx = lx - gx
+        dy = ly - gy
+        dz = lz - gz
+
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
 
     # Debug functions - do not affect agent state or reward
     def debug_event(self, name, amount=1):
