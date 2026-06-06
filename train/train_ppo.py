@@ -334,6 +334,7 @@ if __name__ == '__main__':
         if args.load_model:  # load existing checkpoint
             model = PPO.load(args.load_model, env=env, device="cpu")
             model.learning_rate = args.lr
+            model.lr_schedule = lambda _: args.lr
         else:
             model = PPO(
                 "MlpPolicy",
