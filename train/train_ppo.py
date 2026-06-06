@@ -161,6 +161,7 @@ class MalmoStructuredEnv(gym.Env):
         obs, reward, done, info = self.env.step(int(action))
         self.last_frame = obs
         info_dict = json.loads(info) if info else {}
+        metrics = {"task_success": False}
 
         reward = float(reward)
         task_done = False
@@ -174,6 +175,7 @@ class MalmoStructuredEnv(gym.Env):
                     action=int(action),
                     step=self.steps,
                 )
+                metrics.setdefault("task_success", False)
 
             state = build_state(info_dict, task_module=self.task_module)
 
@@ -188,6 +190,7 @@ class MalmoStructuredEnv(gym.Env):
         terminated = bool(done or task_done)
         truncated = bool(self.args.episodemaxsteps > 0 and self.steps >= self.args.episodemaxsteps)
 
+        info_dict.update(metrics)
         return state, reward, terminated, truncated, info_dict
     
     def close(self):
@@ -268,7 +271,11 @@ if __name__ == '__main__':
 
     else:
         log_dir = Path(args.model_path)
-        env = Monitor(env, filename=str(log_dir / "monitor.csv"))  # Monitor warpper for logging rewards
+        env = Monitor(
+            env,
+            filename=str(log_dir / "monitor.csv"),
+            info_keywords=("task_success",),
+        )  # Monitor wrapper for logging rewards and task success.
 
         policy_kwargs=dict(  # larger PPO network
             net_arch=dict(pi=[256, 256], vf=[256, 256])
