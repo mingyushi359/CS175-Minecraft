@@ -4,6 +4,14 @@ Running Minecraft simulation using [`MalmoEnv`](https://github.com/Microsoft/mal
 
 ---
 
+## Final Models
+checkout each branch for the final implementation of the following tasks:
+1. [Block Breaking](https://github.com/mingyushi359/CS175-Minecraft/tree/multi-target-break-blocks)
+2. [Crop Planting](https://github.com/mingyushi359/CS175-Minecraft/tree/farmlands_planting)
+3. Mob Killing
+
+---
+
 ## Java Requirements (Windows)
 
 ### 1. Install Java8 JDK ([AdoptOpenJDK](https://adoptopenjdk.net/))
