@@ -134,76 +134,59 @@ The current per-episode xml reloading works by manually closing and re-initializ
 ---
 
 ## Missions
-### mob_chase.py (single target)
-#### Training Command
-
-```bash
-python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
-```
-#### Evaluation Command
-
-```bash
-python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/mob_chase.py --model-path ppo_logs/out1/ppo_final.zip --task-py train/tasks/mob_chase.py --eval --episodes 5
-```
-
-#### Example Recording
-<img width="160" height="120" alt="episode_0_reward_51 46" src="imgs/mob_chase/pig_1.gif" />
-<img width="160" height="120" alt="episode_1_reward_47 32" src="imgs/mob_chase/pig_2.gif" />
-
----
-
-### multi_target_navigation.py (multi-target, fixed layout)
-#### Training Command
-
-```bash
-python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
-```
-
-#### Evaluation Command
-
-```bash
-python train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_navigation.py --model-path ppo_logs/out13/ppo_65000_steps.zip --projection --eval --episodes 5 --instruction "go to the pig" 
-```
-
-#### Example Recording
-
-|"go to the pig"|"go to the log"|"go to the emerald"|
-| -------- | -------- | -------- |
-|<img width="160" height="120" alt="episode_0_reward_48 05" src="imgs/navigation/pig.gif" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="imgs/navigation/wood_log.gif" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="imgs/navigation/emerald.gif" />|
-
-#### Example learning plot
-
-<img width="1500" height="750" alt="reward_curve" src="imgs/navigation/reward.png" />
-<img width="1500" height="750" alt="steps_curve" src="imgs/navigation/step.png" />
-
-This run was from the "Add obstacle states" commit. The best model appears to be the 57500_steps checkpoint, and the learning started to drift away after that
-
----
-
 ### multi_target_break_blocks.py (multi-target, shuffled layout)
 #### Training Command
-The per-episode xml reloading implementation causes Malmo to lag early or even crash during long runs. It's recommended to only run up to 175k (or even fewer) steps, and restart Malmo and continue from the previous checkpoint.
+The per-episode xml reloading implementation causes Malmo to lag early or even crash during long runs. It's recommended to only run up to 200k (or even fewer) steps, depending on number of episodes/resets, and restart Malmo and continue from the previous checkpoint.
 
 Run 1:
 ```bash
-python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 175000 --model-path ppo_logs_break_blocks/out20/ --task-py train/tasks/multi_target_break_blocks.py --projection --random --lr 3e-4 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out20/out.txt 2>&1
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs_break_blocks/out31_p1/ --task-py train/tasks/multi_target_break_blocks.py --projection --random --lr 1.8e-4 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out31_p1/out.txt 2>&1
 ```
 
-Run 2, fine-tune from the 175k checkpoint:
-- (required) In task-py manaully set `self.current_episode` to however many episode completed in the previous run (check # rows in monitor.csv)
-- `--n-steps` reduce from 2048 -> 1024
-- `--lr` reduce from 3e-4 to 1e-4
+Run 2, continue from the 100k checkpoint:
+- `--lr` reduce from 1.8e-4 to 1e-4
 
 ```bash
-python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 125 --total-timesteps 175000 --model-path ppo_logs_break_blocks/out20_cont/ --task-py train/tasks/multi_target_break_blocks.py --load-model ppo_logs_break_blocks/out20/ppo_175000_steps.zip --projection --random --lr 3e-4 --n-steps 1024 --batch-size 128 > ppo_logs_break_blocks/out20_cont/out.txt 2>&1
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs_break_blocks/out31_p2/ --task-py train/tasks/multi_target_break_blocks.py --load-model ppo_logs_break_blocks/out31_p1/ppo_final.zip --projection --random --lr 1e-4 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out31_p2/out.txt 2>&1
 ```
 
+Run 3, more fine-tuning:
+same 1e-4
+
+```bash
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs_break_blocks/out31_p3/ --task-py train/tasks/multi_target_break_blocks.py --load-model ppo_logs_break_blocks/out31_p2/ppo_final.zip --projection --random --lr 1e-4 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out31_p3/out.txt 2>&1
+```
+
+Run 4:
+
+5e-5
+```
+python -u train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs_break_blocks/out31_p4/ --task-py train/tasks/multi_target_break_blocks.py --load-model ppo_logs_break_blocks/out31_p3/ppo_final.zip --projection --random --lr 5e-5 --n-steps 2048 --batch-size 128 > ppo_logs_break_blocks/out31_p4/out.txt 2>&1
+```
 
 #### Evaluation Command
 
 ```bash
-python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 50 --task-py train/tasks/multi_target_break_blocks.py --model-path ppo_logs_break_blocks/out19/ppo_150000_steps.zip --projection --random --eval --episodes 5 --instruction "break the diamond ore" 
+python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_break_blocks.py --model-path ppo_logs_break_blocks/out31_p4/ppo_36000_steps.zip --projection --random --eval --episodes 5 --instruction "break the diamond ore"
 ```
+#### Learning plot
+
+<img width="1500" height="750" alt="reward_curve" src="imgs/block_breaking/reward.png" />
+<img width="1500" height="750" alt="steps_curve" src="imgs/block_breaking/steps.png" />
+
+#### Recording
+1. PPO Sentence Transformer Model
+
+|"break the diamond ore"|"break the log"|"break the clay"|
+| -------- | -------- | -------- |
+|<img width="400" height="300" src="imgs/block_breaking/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/clay.gif" />|
+
+2. PPO Single-Target Baseline Model
+
+|"break the diamond ore"|"break the log"|"break the clay"|
+| -------- | -------- | -------- |
+|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/clay.gif" />|
+
 
 ---
 

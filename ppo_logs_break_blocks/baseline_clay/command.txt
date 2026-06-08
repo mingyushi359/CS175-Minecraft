@@ -1,0 +1,5 @@
+
+
+
+eval:
+python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/single_target_break_blocks.py --model-path ppo_logs_break_blocks/baseline_clay/ppo_80000_steps.zip --projection --random --eval --episodes 10 --instruction "break the clay"
