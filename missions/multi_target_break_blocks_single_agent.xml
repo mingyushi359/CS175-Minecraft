@@ -34,7 +34,7 @@
                 <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="4" z2="12" type="spruce_fence" />
                 <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="4" z2="12" type="spruce_fence" />
 
-                <!-- <DrawCuboid x1="11" y1="4" z1="0" x2="11" y2="4" z2="12" type="fence" /> -->
+                <DrawCuboid x1="11" y1="4" z1="0" x2="11" y2="4" z2="12" type="fence" />
                 
                 <!-- Tool-task target blocks. -->
                 <!-- Pickaxe target. -->
@@ -89,7 +89,6 @@
             <DiscreteMovementCommands>
                 <ModifierList type="allow-list">
                     <command>move</command>
-                    <command>turn</command>
                     <command>strafe</command>
                     <command>attack</command>
                 </ModifierList>
@@ -120,8 +119,8 @@
             <RewardForSendingCommand reward="-0.01" />
 
             <VideoProducer want_depth="false">
-                <Width>200</Width>
-                <Height>150</Height>
+                <Width>400</Width>
+                <Height>300</Height>
             </VideoProducer>
         </AgentHandlers>
     </AgentSection>

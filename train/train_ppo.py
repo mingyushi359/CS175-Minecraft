@@ -2,6 +2,7 @@ import argparse
 import copy
 import importlib.util
 import json
+import random
 import time
 from pathlib import Path
 import utility
@@ -273,7 +274,11 @@ if __name__ == '__main__':
             record_dir = Path(args.model_path).parent / "ppo_eval_records"
             record_dir.mkdir(exist_ok=True)
 
-        for i in range(args.episodes):
+        average_reward = 0.0
+        average_steps = 0
+        success_count = 0
+
+        for i in range(1, args.episodes + 1):
             obs, info = env.reset()
 
             terminated = False
@@ -287,7 +292,7 @@ if __name__ == '__main__':
                 frames.append(np.flipud(env.last_frame.reshape(env.obs_shape)))
 
             while not terminated and not truncated:
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=False)
                 action = int(action)
 
                 action_counts[action] = action_counts.get(action, 0) + 1
@@ -305,10 +310,16 @@ if __name__ == '__main__':
                 record_path = record_dir / f"episode_{i}_reward_{episode_reward:.2f}.gif"
                 imageio.mimsave(record_path, frames, fps=8, loop=0)
 
+            if terminated:
+                success_count += 1
+                average_reward = ((i - 1) * average_reward + episode_reward) / i
+                average_steps = ((i - 1) * average_steps + steps) / i
+
             print(
                 f"EVAL episode={i}, steps={steps}, "
                 f"reward={episode_reward:.2f}, actions={action_counts}"
             )
+        print(f"Average completion reward: {average_reward:.4f}, average completion steps: {average_steps:.4f}, success rate: {success_count / args.episodes:.4%}")
 
     else:
         log_dir = Path(args.model_path)
@@ -350,7 +361,7 @@ if __name__ == '__main__':
             )
 
         checkpoint_callback = CheckpointCallback(
-            save_freq=2500,
+            save_freq=1000,
             save_path=args.model_path,
             name_prefix="ppo"
         )

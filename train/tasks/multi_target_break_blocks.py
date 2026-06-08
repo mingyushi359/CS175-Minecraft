@@ -194,12 +194,15 @@ class Task(BaseTask):
         ]
         xz = x_z_layout[self.current_layout_idx]
 
-        if self.eval:
-            xz = random.choice(x_z_layout)
-
-        agent_x = random.choice([4.5])
+        agent_x = random.choice([1.5])
         agent_z = random.choice([6.5])
         agent_yaw = random.choice([270])
+
+        if self.eval:
+            self.current_episode += 1
+            xz = x_z_layout[self.current_episode % len(x_z_layout)]  # fixed layout order for eval
+            # xz = random.choice(x_z_layout)  # random layout for eval
+            agent_x = 4.5
 
         return (
                 base_xml
