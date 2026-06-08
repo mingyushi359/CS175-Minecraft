@@ -203,8 +203,9 @@ class Task(BaseTask):
         agent_yaw = random.choice([270])
 
         if self.eval:
-            self.current_episode += 1
-            xz = x_z_layout[self.current_episode % len(x_z_layout)]  # fixed layout order for eval
+            xz = self.get_eval_layout()
+            # self.current_episode += 1
+            # xz = x_z_layout[self.current_episode % len(x_z_layout)]  # fixed layout order for eval
             # xz = random.choice(x_z_layout)  # random layout for eval
             agent_x = 1.5
 
@@ -220,6 +221,24 @@ class Task(BaseTask):
                 .replace("__AGENT_Z__", str(agent_z))
                 .replace("__AGENT_YAW__", str(agent_yaw))
             )
+    def get_eval_layout(self):
+        candidates = [1, 3, 5, 7, 9, 11]
+
+        valid_layouts = []
+        for d in candidates:
+            for l in candidates:
+                for c in candidates:
+                    zs = [d, l, c]
+                    if len(set(zs)) < 3:
+                        continue
+                    if min(abs(zs[i] - zs[j]) for i in range(3) for j in range(i + 1, 3)) < 2:
+                        continue
+                    valid_layouts.append([(11, d), (11, l), (11, c)])
+
+        # deterministic pseudo-random order
+        idx = (self.current_episode * 7 + 3) % len(valid_layouts)
+        self.current_episode += 1
+        return valid_layouts[idx]
 
     def build_state(self, info_dict):
         # build state for multi target
