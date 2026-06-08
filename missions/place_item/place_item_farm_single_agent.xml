@@ -33,24 +33,23 @@
                 <DrawCuboid x1="0" y1="4" z1="12" x2="12" y2="5" z2="12" type="spruce_fence" />
                 <DrawCuboid x1="0" y1="4" z1="0" x2="0" y2="5" z2="12" type="spruce_fence" />
                 <DrawCuboid x1="12" y1="4" z1="0" x2="12" y2="5" z2="12" type="spruce_fence" />
-
+                <DrawCuboid x1="11" y1="5" z1="0" x2="11" y2="5" z2="12" type="spruce_fence" />
                 <!-- Farm area: farmland around water -->
                 <!-- Ground base -->
-                <DrawBlock x="6" y="2" z="6" type="dirt" />
+                <DrawBlock x="12" y="2" z="6" type="dirt" />
 
                 <!-- Water source inside the ground level -->
-                <DrawBlock x="6" y="3" z="6" type="water" />
+                <DrawBlock x="12" y="3" z="6" type="water" />
 
                 <!-- Fence above the water -->
-                <DrawBlock x="6" y="4" z="6" type="spruce_fence" />
 
                 <!-- 5x5 farmland patch around water, excluding center water block -->
 
                 <!-- center water at x=6 z=6 -->
 
-                <DrawBlock x="5" y="3" z="7" type="farmland" />
-                <DrawBlock x="6" y="3" z="7" type="farmland" />
-                <DrawBlock x="7" y="3" z="7" type="farmland" />
+                <DrawBlock x="11" y="3" z="5" type="farmland" />
+                <DrawBlock x="11" y="3" z="6" type="farmland" />
+                <DrawBlock x="11" y="3" z="7" type="farmland" />
             </DrawingDecorator>
 
             <ServerQuitFromTimeUp timeLimitMs="30000" />
@@ -62,7 +61,7 @@
         <Name>Agent0</Name>
 
         <AgentStart>
-            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="30" />
+            <Placement x="1.5" y="4.0" z="6.5" yaw="270" pitch="50" />
 
             <Inventory>
                 <InventoryItem slot="0" type="wheat_seeds" quantity="64" />

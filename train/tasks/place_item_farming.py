@@ -17,7 +17,7 @@ class Task(BaseTask):
     ANCHOR_MIN_OVERLAP_RATIO = 0.8
 
     # debug section code - does not affect agent state or reward
-    DEBUG_PRINT = True
+    DEBUG_PRINT = False
     DEBUG_PRINT_EVERY_N_STEPS = 100
     SLOW_STEP_WARN_SECONDS = 0.20
 
@@ -25,15 +25,16 @@ class Task(BaseTask):
 
     TARGETS = [
         "wheat",
-        # "carrot", 
-        # "potato"
+        "carrot", 
+        "potato"
         ]
 
+    TARGET_EPISODE_BATCH = 3
+
     CUSTOM_ACTIONS = [
-        "move 0",      # 0: no-op / stay still
         "move 1",      # 1: forward
-        "turn 1",      # 2: turn right
-        "turn -1",     # 3: turn left
+        # "turn 1",      # 2: turn right
+        # "turn -1",     # 3: turn left
         "strafe 1",    # 4: strafe right
         "strafe -1",   # 5: strafe left
         "hotbar.1 1",  # 6: select wheat seeds
@@ -42,11 +43,14 @@ class Task(BaseTask):
         "use 1",       # 9: use/place crop
     ]
 
-    FORWARD_ACTION = 1
-    TURN_ACTIONS = [2, 3]
-    MOVEMENT_ACTIONS = [1, 4, 5]
-    HOTBAR_ACTIONS = {6: "wheat", 7: "carrot", 8: "potato"}
-    USE_ACTION = 9
+    FORWARD_ACTION = 0
+    TURN_ACTIONS = [] # 1, 2
+    STRAFE_ACTIONS = [1, 2] # 3, 4
+    MOVEMENT_ACTIONS = [0, 1, 2]
+    HOTBAR_ACTIONS = {3: "wheat", 4: "carrot", 5: "potato"}
+    USE_ACTION = 6
+
+
 
     INSTRUCTION_TEMPLATE = [
         "plant {}",
@@ -88,8 +92,8 @@ class Task(BaseTask):
     # Non-text state:
     # agent(2) + current-goal farmland(5) + memory progress(3)
     # + selected slot(3) + hotbar items(3) + obstacles(4)
-    # + can_use(1) + task id(1) = 22
-    STATE_DIM = 22
+    # + los_feature(3) + task id(1) = 24
+    STATE_DIM = 24
 
     GRID_MIN = {"x": -8, "y": -1, "z": -8}
     GRID_MAX = {"x": 8, "y": 1, "z": 8}
@@ -101,11 +105,10 @@ class Task(BaseTask):
     # Used only to normalize memory-count features. This does not need to equal the true total.
     MEMORY_COUNT_SCALE = 32.0
 
-    BAD_USE_NOT_READY_PENALTY = -1.2
-    BAD_USE_NO_CONFIRM_PENALTY = -0.4
+    USE_INVALID_TARGET_PENALTY = -0.3
+    BAD_USE_NO_CONFIRM_PENALTY = -0.2
 
     STEP_PENALTY = -0.03
-    NO_OP_WITH_GOAL_PENALTY = -0.1
     COMPLETE_ALL_REWARD = 100.0
     BECAME_CAN_USE_REWARD = 0.1
     READY_WITH_CORRECT_SLOT_REWARD = 0.0
@@ -117,31 +120,30 @@ class Task(BaseTask):
     WRONG_PLANT_PENALTY = -10.0
     FAILED_FULL_FARM_PENALTY = -20.0
 
-    WRONG_SLOT_USE_PENALTY = -0.5
-    BAD_USE_PENALTY = -0.7
-    SUCCESSFUL_PLANT_REWARD = 2.0
+    WRONG_SLOT_USE_PENALTY = -2.0
 
-    CORRECT_SLOT_SELECT_REWARD = 0.15
-    INCORRECT_SLOT_SELECT_PENALTY = -0.08
-    NO_PROGRESS_PENALTY_HOTBAR = -0.08
-    SWITCH_AWAY_FROM_CORRECT_SLOT_PENALTY = -0.25
-    HOLDING_CORRECT_SLOT_REWARD = 0.02
-    HOLDING_WRONG_SLOT_PENALTY = -0.03
+    CORRECT_SLOT_SELECT_REWARD = 10.0
+    REPEAT_CORRECT_SLOT_PENALTY = -0.1
+    INCORRECT_SLOT_SELECT_PENALTY = -0.5
+    NO_PROGRESS_PENALTY_HOTBAR = -0.1
+    SWITCH_AWAY_FROM_CORRECT_SLOT_PENALTY = -0.5
+    HOLDING_CORRECT_SLOT_REWARD = 0.0
+    HOLDING_WRONG_SLOT_PENALTY = -0.0
 
     CAN_USE_CORRECT_SLOT_REWARD = 0.0
 
     # Lower distance/look shaping because movement is discrete.
-    DISTANCE_PROGRESS_SCALE = 0.5
+    DISTANCE_PROGRESS_SCALE = 1.2
     LOOK_PROGRESS_SCALE = 0.04
 
     GOOD_FACING_DEGREES = 45.0
     OK_FACING_DEGREES = 60.0
     BAD_FACING_DEGREES = 90.0
 
-    NO_PROGRESS_PENALTY = -0.05
+    NO_PROGRESS_PENALTY = -0.25
     BAD_FORWARD_PENALTY = -0.05
     UNNECESSARY_TURN_PENALTY = -0.08
-    STUCK_EXTRA_PENALTY = -0.2
+    STUCK_EXTRA_PENALTY = -0.0
 
     MISSED_USE_CHANCE_PENALTY = -0.8
 
@@ -150,12 +152,14 @@ class Task(BaseTask):
     TURN_SPAM_PENALTY = -0.12
     TURN_SPAM_THRESHOLD = 4
     BAD_TURN_NO_PROGRESS_PENALTY = -0.08
-    BAD_STRAFE_NO_PROGRESS_PENALTY = -0.03
+    BAD_STRAFE_NO_PROGRESS_PENALTY = -0.0
 
     PROGRESSIVE_PLANT_REWARD_BASE = 3.0
     PROGRESSIVE_PLANT_REWARD_SCALE = 2.0
 
     MIN_SEEN_FARMLAND_TO_ALLOW_MEMORY_DONE = 3
+
+    USE_WRONG_GOAL_PENALTY = -2.0
 
     def __init__(self):
         super().__init__(GRID_MIN=self.GRID_MIN, GRID_MAX=self.GRID_MAX)
@@ -166,13 +170,13 @@ class Task(BaseTask):
         self.embedding_cache = {}
 
         self.selected_slot = 0
-        self.stuck_movement_counter = 0
         self.prev_success_count = 0
         self.current_goal_world = None
 
         self.consecutive_turn_counter = 0
 
         self._step_obs_cache = {}
+        self.select_correct_slot_once = False
 
         # Agent memory / internal progress tracking.
         # seen/memory_empty are based on observation history.
@@ -186,6 +190,10 @@ class Task(BaseTask):
         self.last_grid_anchor = None
         self.pending_farmland_world_counts = {}
         self.pending_anchor_worldset_counts = {}
+
+        self.current_episode = 0
+        self.target_bag = []
+        self.eval = False
 
         # debug section code - does not affect agent state or reward
         self.debug_action_counts = {i: 0 for i in range(len(self.CUSTOM_ACTIONS))}
@@ -202,13 +210,13 @@ class Task(BaseTask):
             del self._printed_local_grid_debug
 
         self.selected_slot = 0
-        self.stuck_movement_counter = 0
         self.prev_success_count = 0
         self.current_goal_world = None
 
         self.consecutive_turn_counter = 0
 
         self._step_obs_cache = {}
+        self.select_correct_slot_once = False
 
         self.seen_farmland_world = set()
         self.memory_empty_farmland_world = set()
@@ -221,15 +229,33 @@ class Task(BaseTask):
         self.pending_anchor_worldset_counts = {}
 
         if instruction is None:
-            self.current_target = random.choice(self.TARGETS)
+            self.eval = eval_mode
+            self.current_target = self.choose_target()
+            self.current_episode += 1
+
             template = random.choice(self.INSTRUCTION_TEMPLATE)
             target_alias = random.choice(self.TARGET_ALIASES[self.current_target])
             self.current_instruction = template.format(target_alias)
         else:
+            self.eval = eval_mode
             self.current_instruction = instruction
             self.current_target = self.parse_target(instruction)
 
         self.current_instruction_embedding = self.encode_instruction(self.current_instruction)
+    
+    def choose_target(self):
+        if self.eval:
+            return random.choice(self.TARGETS)
+
+        if len(self.target_bag) == 0:
+            targets = list(self.TARGETS)
+            random.shuffle(targets)
+
+            self.target_bag = []
+            for t in targets:
+                self.target_bag.extend([t] * self.TARGET_EPISODE_BATCH)
+
+        return self.target_bag.pop()
 
     def encode_instruction(self, text):
         if text in self.embedding_cache:
@@ -267,14 +293,19 @@ class Task(BaseTask):
         goal = self.get_or_update_goal_farmland(info_dict)
         farmland_features = self.goal_to_features(goal)
 
+        goal_world = goal["world"] if goal is not None else self.current_goal_world
+        los_features = [
+            1.0 if self.los_matches_goal(info_dict, goal_world) else 0.0,
+            1.0 if self.los_matches_wrong_goal(info_dict, goal_world) else 0.0,
+            1.0 if self.can_use_available_farmland_now(info_dict) > 0.0 else 0.0,
+        ]
+
         scale = max(1.0, self.MEMORY_COUNT_SCALE)
         farm_memory_features = [
             min(len(self.memory_empty_farmland_world) / scale, 1.0),
             min(len(self.planted_farmland_world) / scale, 1.0),
             min(len(self.wrong_planted_farmland_world) / scale, 1.0),
         ]
-
-        can_use_feature = [self.can_use_available_farmland_now(info_dict)]
 
         selected_features = [
             1.0 if self.selected_slot == 0 else 0.0,
@@ -307,7 +338,7 @@ class Task(BaseTask):
             + selected_features
             + hotbar_item_features
             + obstacle_features
-            + can_use_feature
+            + los_features
             + [float(self.TASK_ID)]
             + self.current_instruction_embedding
         )
@@ -346,32 +377,20 @@ class Task(BaseTask):
         if action in self.HOTBAR_ACTIONS:
             selected_target = self.HOTBAR_ACTIONS[action]
             new_slot = self.TARGET_SLOT[selected_target]
-
-            if new_slot == old_slot:
-                reward += self.NO_PROGRESS_PENALTY_HOTBAR
-                self.debug_event("repeat_same_hotbar")
-
-            elif old_slot != target_slot and new_slot == target_slot:
-                reward += self.CORRECT_SLOT_SELECT_REWARD
-                self.debug_event("switch_to_correct_slot")
-
-            elif old_slot == target_slot and new_slot != target_slot:
-                reward += self.SWITCH_AWAY_FROM_CORRECT_SLOT_PENALTY
-                self.debug_event("switch_away_from_correct_slot")
-            else:
-                reward += self.INCORRECT_SLOT_SELECT_PENALTY
-                self.debug_event("switch_wrong_to_wrong")
+            target_slot = self.TARGET_SLOT[self.current_target]
 
             self.selected_slot = new_slot
-        
-        # If there is still having empty farmland in memory, encourage the agent to hold the correct seed slot and use it, even before seeing the "can_use" signal or the target farmland, since those require specific observation and may not be immediately visible.
-        if len(self.memory_empty_farmland_world) > 0:
-            if self.selected_slot == target_slot:
-                reward += self.HOLDING_CORRECT_SLOT_REWARD
-                self.debug_event("holding_correct_slot")
+            if new_slot == target_slot:
+                if not self.select_correct_slot_once:
+                    reward += self.CORRECT_SLOT_SELECT_REWARD
+                    self.select_correct_slot_once = True
+                    self.debug_event("first_correct_slot_select")
+                else:
+                    reward += self.REPEAT_CORRECT_SLOT_PENALTY
+                    self.debug_event("repeat_correct_slot_select")
             else:
-                reward += self.HOLDING_WRONG_SLOT_PENALTY
-                self.debug_event("holding_wrong_slot")
+                reward += self.INCORRECT_SLOT_SELECT_PENALTY
+                self.debug_event("wrong_slot_select")
         
         # 2. Water handling
         if self.is_agent_in_water(curr_info):
@@ -413,32 +432,34 @@ class Task(BaseTask):
         prev_goal = self.get_goal_relative(prev_info, goal_world_for_step) if has_prev_info else None
         curr_goal = self.get_goal_relative(curr_info, goal_world_for_step)
 
-        if action == 0 and curr_goal is not None:
-            reward += self.NO_OP_WITH_GOAL_PENALTY
-            self.debug_event("noop_with_goal")
-
         prev_can_use = self.can_use_available_farmland_now(prev_info) if has_prev_info else 0.0
         curr_can_use = self.can_use_available_farmland_now(curr_info)
 
         prev_target_goal_usable = (has_prev_info and self.is_target_goal_usable_now(prev_info, goal_world_for_step))
+        curr_target_goal_usable = self.is_target_goal_usable_now(curr_info, goal_world_for_step)
 
+
+        # Debug only: any usable farmland, not necessarily target goal.
+        if curr_can_use > 0.0:
+            self.debug_event("can_use_seen_any_farmland")
+
+        if curr_can_use > 0.0 and self.selected_slot == target_slot:
+            self.debug_event("can_use_correct_slot_seen_any_farmland")
+
+        # Reward: only target goal became usable.
+        if (not prev_target_goal_usable) and curr_target_goal_usable:
+            reward += self.BECAME_CAN_USE_REWARD
+            self.debug_event("became_target_goal_can_use")
+
+        # Penalty: only target goal was usable but agent did not use.
         if (prev_target_goal_usable and action != self.USE_ACTION and old_slot == target_slot):
             reward += self.MISSED_USE_CHANCE_PENALTY
             self.debug_event("missed_use_chance_target_goal")
 
-        if prev_can_use <= 0.0 and curr_can_use > 0.0:
-            reward += self.BECAME_CAN_USE_REWARD
-            self.debug_event("became_can_use")
-
-        if curr_can_use > 0.0:
-            self.debug_event("can_use_seen")
-
-        if curr_can_use > 0.0 and self.selected_slot == target_slot:
-            self.debug_event("can_use_correct_slot_seen")
-
-        if curr_can_use > 0.0 and self.selected_slot == target_slot:
+        # Ready event/reward: only target goal ready.
+        if curr_target_goal_usable and self.selected_slot == target_slot:
             reward += self.READY_WITH_CORRECT_SLOT_REWARD
-            self.debug_event("ready_correct_slot")
+            self.debug_event("ready_correct_slot_target_goal")
 
         if prev_goal is not None and curr_goal is not None:
             prev_los_dist = self.get_los_distance_to_goal(prev_info, goal_world_for_step) if has_prev_info else None
@@ -449,7 +470,7 @@ class Task(BaseTask):
             else:
                 distance_progress = prev_goal["distance"] - curr_goal["distance"]
 
-            if action in [4, 5] and distance_progress <= 0.01:
+            if action in self.STRAFE_ACTIONS and distance_progress <= 0.01:
                 reward += self.BAD_STRAFE_NO_PROGRESS_PENALTY
                 self.debug_event("bad_strafe_no_progress")
 
@@ -458,15 +479,12 @@ class Task(BaseTask):
             # Penalize turning that does not improve aim.
             if action in self.TURN_ACTIONS:
                 self.consecutive_turn_counter += 1
-
                 if prev_goal["yaw_error"] <= self.GOOD_FACING_DEGREES:
                     reward += self.UNNECESSARY_TURN_PENALTY
                     self.debug_event("turn_when_already_facing")
-
                 elif look_progress <= 0.5:
                     reward += self.BAD_TURN_NO_PROGRESS_PENALTY
                     self.debug_event("bad_turn_no_look_progress")
-                
                 else:
                     reward += self.LOOK_PROGRESS_SCALE * self.clamp(look_progress, 0.0, 10.0)
 
@@ -476,20 +494,18 @@ class Task(BaseTask):
             else:
                 self.consecutive_turn_counter = 0
 
-            if curr_goal["yaw_error"] <= self.OK_FACING_DEGREES:
-                reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
+            # Movement progress, block-break style.
+            if action in self.MOVEMENT_ACTIONS:
+                if distance_progress > 0:
+                    reward += self.DISTANCE_PROGRESS_SCALE * self.clamp(distance_progress, -1.0, 1.0)
+                    self.debug_event("move_closer_to_goal")
+                else:
+                    reward += self.NO_PROGRESS_PENALTY
+                    self.debug_event("move_no_goal_progress")
+            # Disabled in no-turn curriculum.
+            # if action == self.FORWARD_ACTION and curr_goal["yaw_error"] > self.BAD_FACING_DEGREES:
+            #     reward += self.BAD_FORWARD_PENALTY
 
-            if action == self.FORWARD_ACTION and curr_goal["yaw_error"] > self.BAD_FACING_DEGREES:
-                reward += self.BAD_FORWARD_PENALTY
-
-            if action in self.MOVEMENT_ACTIONS and distance_progress <= 0.01:
-                reward += self.NO_PROGRESS_PENALTY
-                self.stuck_movement_counter += 1
-
-                if self.stuck_movement_counter >= 5:
-                    reward += self.STUCK_EXTRA_PENALTY
-            else:
-                self.stuck_movement_counter = 0
 
         # 4. Planting reward
         # Do NOT use curr_stats - prev_stats here because those are local observations only.
@@ -501,6 +517,7 @@ class Task(BaseTask):
             else:
                 can_use_before = prev_can_use
                 target_world = self.get_targeted_farmland_world(prev_info)
+                target_is_goal = target_world == goal_world_for_step
 
                 prev_selected_count = self.get_inventory_count_by_slot(prev_info, self.selected_slot)
                 curr_selected_count = self.get_inventory_count_by_slot(curr_info, self.selected_slot)
@@ -520,7 +537,6 @@ class Task(BaseTask):
 
                 ready_before = (
                     can_use_before > 0.0
-                    and self.selected_slot == target_slot
                     and target_world is not None
                 )
 
@@ -531,7 +547,8 @@ class Task(BaseTask):
                 )
 
                 if not ready_before:
-                    # reward += self.BAD_USE_NOT_READY_PENALTY
+                    # If the agent tried to use when it not a available farmland, give a penalty. This encourages the agent to learn the correct timing of use, rather than just spamming use and hoping for a lucky hit.
+                    reward += self.USE_INVALID_TARGET_PENALTY
                     if can_use_before <= 0.0:
                         self.debug_event("use_fail_not_usable")
                     elif target_world is None:
@@ -540,62 +557,85 @@ class Task(BaseTask):
                         self.debug_event("use_fail_wrong_slot")
 
                 elif not actual_planted:
-                    # reward += self.BAD_USE_NO_CONFIRM_PENALTY
+                    reward += self.BAD_USE_NO_CONFIRM_PENALTY
                     self.debug_event("use_fail_no_plant_confirmed")
 
                 else:
-                    reward += self.USE_WHEN_READY_REWARD
-                    self.debug_event("use_when_ready")
                     self.debug_event("successful_plant_use")
 
+                    if not target_is_goal:
+                    # penalty for plant on a non-goal farmland, to encourage the agent to prioritize the current goal rather than just filling any farmland. This is important for learning the correct order of planting when there are multiple farmlands.
+                        reward += self.USE_WRONG_GOAL_PENALTY
+                        self.debug_event("use_wrong_goal_penalty")
+
                     if crop_appeared:
-                        planted_target = self.is_target_crop_block(crop_after, self.current_target)
+                        planted_target_crop = self.is_target_crop_block(crop_after, self.current_target)
                     else:
-                        planted_target = self.selected_slot == target_slot
+                        planted_target_crop = self.selected_slot == target_slot
 
-                    if planted_target:
-                        if target_world not in self.planted_farmland_world:
-                            self.debug_event("correct_plant")
-                            self.planted_farmland_world.add(target_world)
-                            self.wrong_planted_farmland_world.discard(target_world)
-                            self.memory_empty_farmland_world.discard(target_world)
-                            self.prev_success_count = len(self.planted_farmland_world)
+                    was_already_planted = target_world in self.planted_farmland_world
+                    was_already_wrong = target_world in self.wrong_planted_farmland_world
 
-                            progressive_reward = self.PROGRESSIVE_PLANT_REWARD_BASE + self.PROGRESSIVE_PLANT_REWARD_SCALE * self.prev_success_count
-                            reward += progressive_reward
-                            self.debug_event(f"progressive_correct_plant_{self.prev_success_count}")
+                    if planted_target_crop:
+                        # Memory: this farmland is now correctly filled, even if it was not the current goal.
+                        self.planted_farmland_world.add(target_world)
+                        self.wrong_planted_farmland_world.discard(target_world)
+                        self.memory_empty_farmland_world.discard(target_world)
 
-                            metrics["new_plants"] = 1
-                            self.current_goal_world = None
+                        if target_is_goal:
+                            reward += self.USE_WHEN_READY_REWARD
+                            self.debug_event("use_when_ready_target_goal")
+
+                            if not was_already_planted:
+                                self.debug_event("correct_target_goal_plant")
+                                self.prev_success_count = len(self.planted_farmland_world)
+
+                                progressive_reward = (
+                                    self.PROGRESSIVE_PLANT_REWARD_BASE
+                                    + self.PROGRESSIVE_PLANT_REWARD_SCALE * self.prev_success_count
+                                )
+                                reward += progressive_reward
+                                self.debug_event(f"progressive_correct_plant_{self.prev_success_count}")
+
+                                metrics["new_plants"] = 1
+                                self.current_goal_world = None
+                            else:
+                                self.debug_event("duplicate_correct_target_goal_plant")
+
                         else:
-                            self.debug_event("duplicate_correct_plant")
+                            # Correct crop, but not the current goal.
+                            # Do not mark as wrong. Just update memory.
+                            self.debug_event("off_goal_correct_crop_plant")
                     else:
-                        self.debug_event("wrong_slot_use")
-                        if target_world not in self.wrong_planted_farmland_world:
-                            self.debug_event("wrong_plant")
-                            self.wrong_planted_farmland_world.add(target_world)
-                            self.planted_farmland_world.discard(target_world)
-                            self.memory_empty_farmland_world.discard(target_world)
+                        # Wrong crop, regardless of whether it was target goal or off-goal.
+                        self.debug_event("wrong_crop_plant")
+
+                        self.wrong_planted_farmland_world.add(target_world)
+                        self.planted_farmland_world.discard(target_world)
+                        self.memory_empty_farmland_world.discard(target_world)
+
+                        if not was_already_wrong:
                             reward += self.WRONG_PLANT_PENALTY
                             metrics["wrong_plants"] = 1
-
+                        
                         reward += self.WRONG_SLOT_USE_PENALTY
-                        self.current_goal_world = None
-                '''self.debug_print(
-                    f"[DEBUG_USE_CHECK] "
-                    f"can_use_before={can_use_before} "
-                    f"target_world={target_world} "
-                    f"slot={self.selected_slot}/{target_slot} "
-                    f"prev_count={prev_selected_count} "
-                    f"curr_count={curr_selected_count} "
-                    f"inventory_decreased={inventory_decreased} "
-                    f"crop_after={crop_after} "
-                    f"crop_appeared={crop_appeared} "
-                    f"ready_before={ready_before} "
-                    f"actual_planted={actual_planted}"
-                ) '''
+
+                        if target_is_goal:
+                            self.current_goal_world = None
         # Keep memory updated from the latest visible local observation.
+        before_correct = len(self.planted_farmland_world)
+        before_wrong = len(self.wrong_planted_farmland_world)
+
         self.update_farmland_memory(curr_info)
+
+        after_correct = len(self.planted_farmland_world)
+        after_wrong = len(self.wrong_planted_farmland_world)
+
+        if after_correct > before_correct:
+            self.debug_event("memory_detected_new_correct_after_update")
+
+        if after_wrong > before_wrong:
+            self.debug_event("memory_detected_new_wrong_after_update")
 
         # 5. Completion check based on memory-empty condition.
         filled_count = self.get_filled_farmland_count()
@@ -1539,6 +1579,23 @@ class Task(BaseTask):
 
         targeted_world = self.get_targeted_farmland_world(info_dict)
         return targeted_world == goal_world
+
+    def los_matches_goal(self, info_dict, goal_world):
+        return self.is_target_goal_usable_now(info_dict, goal_world)
+
+
+    def los_matches_wrong_goal(self, info_dict, goal_world):
+        if not info_dict or goal_world is None:
+            return False
+
+        if self.can_use_available_farmland_now(info_dict) <= 0.0:
+            return False
+
+        targeted_world = self.get_targeted_farmland_world(info_dict)
+        if targeted_world is None:
+            return False
+
+        return targeted_world != goal_world
 
     # Debug functions - do not affect agent state or reward
     def debug_event(self, name, amount=1):

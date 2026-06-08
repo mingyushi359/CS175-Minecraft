@@ -72,7 +72,7 @@ class PlotCallback(BaseCallback):
 
     def _on_step(self):
         if self.num_timesteps % self.save_freq == 0:
-            utility.save_monitor_plots(self.log_dir)
+            utility.save_monitor_plots_by_target(self.log_dir)
         return True
 
 class MalmoStructuredEnv(gym.Env):
@@ -161,7 +161,10 @@ class MalmoStructuredEnv(gym.Env):
         obs, reward, done, info = self.env.step(int(action))
         self.last_frame = obs
         info_dict = json.loads(info) if info else {}
-        metrics = {"task_success": False}
+        metrics = {
+            "task_success": False,
+            "target": self.task_module.current_target if self.task_module is not None else "N/A",
+        }
 
         reward = float(reward)
         task_done = False
@@ -176,6 +179,7 @@ class MalmoStructuredEnv(gym.Env):
                     step=self.steps,
                 )
                 metrics.setdefault("task_success", False)
+                metrics.setdefault("target", self.task_module.current_target if self.task_module is not None else "N/A")
 
             state = build_state(info_dict, task_module=self.task_module)
 
@@ -213,6 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--experimentUniqueId', type=str, default='test1', help="the experiment's unique id.")
     parser.add_argument('--total-timesteps', type=int, default=100000, help='number of PPO training timesteps')
     parser.add_argument('--model-path', type=str, default='ppo_model', help='path to save/load PPO model')
+    parser.add_argument('--resume-from', type=str, default=None, help='path to an existing PPO .zip checkpoint to continue training from')
     parser.add_argument('--eval', action='store_true', help='run trained PPO model instead of training')
     parser.add_argument('--task-py', type=str, default=None, help='optional Python task reward file')
     parser.add_argument('--record', action='store_true', help='record videos during evaluation')
@@ -274,7 +279,7 @@ if __name__ == '__main__':
         env = Monitor(
             env,
             filename=str(log_dir / "monitor.csv"),
-            info_keywords=("task_success",),
+            info_keywords=("task_success","target"),
         )  # Monitor wrapper for logging rewards and task success.
 
         policy_kwargs=dict(  # larger PPO network
@@ -294,18 +299,22 @@ if __name__ == '__main__':
                   f"text_out_dim: {task_module.TEXT_OUT_DIM}"
                   )
 
-        model = PPO(
-            "MlpPolicy",
-            env,
-            verbose=1,
-            learning_rate=3e-4,
-            n_steps=512,
-            batch_size=64,
-            gamma=0.99,
-            ent_coef=0.01,
-            policy_kwargs=policy_kwargs,
-            device="cpu",
-        )
+        if args.resume_from is not None:
+            model = PPO.load(args.resume_from, env=env, device="cpu", learning_rate = 1e-4)
+            print(f"Resumed PPO model from {args.resume_from}")
+        else:
+            model = PPO(
+                "MlpPolicy",
+                env,
+                verbose=1,
+                learning_rate=2e-4,
+                n_steps=512,
+                batch_size=64,
+                gamma=0.99,
+                ent_coef=0.01,
+                policy_kwargs=policy_kwargs,
+                device="cpu",
+            )
 
         checkpoint_callback = CheckpointCallback(
             save_freq=2500,
@@ -321,11 +330,15 @@ if __name__ == '__main__':
         callback = CallbackList([checkpoint_callback, plot_callback])
 
         try:
-            model.learn(total_timesteps=args.total_timesteps, callback=callback)
+            model.learn(
+                total_timesteps=args.total_timesteps,
+                callback=callback,
+                reset_num_timesteps=(args.resume_from is None),
+            )
             model.save(Path(args.model_path) / "ppo_final.zip")
             print(f"Saved PPO model to {args.model_path}/ppo_final.zip")
         finally:
             if not args.eval:
-                utility.save_monitor_plots(log_dir)  # call save plots before exiting
+                utility.save_monitor_plots_by_target(log_dir)  # call save plots before exiting
 
     env.close()
