@@ -140,6 +140,7 @@ python train/train_ppo.py --mission missions/place_item/place_item_farm_single_a
 
 #### Recording
 1. PPO Sentence Transformer Model
+
 |potato|wheat|carrot|
 | -------- | -------- | -------- |
 |<img width="400" height="300" alt="grow_potato" src="images/grow_potato.gif" />|<img width="400" height="300" alt="plant_wheat" src="images/plant_wheat.gif" />|<img width="400" height="300" alt="place_carrot_seed" src="images/place_the_carrot_seed.gif" />|

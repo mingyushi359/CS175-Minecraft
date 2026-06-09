@@ -227,6 +227,4 @@ logs/
 *.log
 *.pt
 *.pth
-*.zip
 *.mp4
-*.csv
