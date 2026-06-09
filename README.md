@@ -175,7 +175,8 @@ python train/train_ppo.py --mission missions/multi_target_break_blocks_single_ag
 <img width="1500" height="750" alt="steps_curve" src="imgs/block_breaking/steps.png" />
 
 #### Recording
-The data for each model was collected by averaging 100 eval episodes, and the recordings are just for reference, not the actual 100-episode run.
+- The data for each model was collected by averaging 100 eval episodes, but the recordings are from a shorter run
+- The average rewards and episodes excludes the data from failed runs
 
 1. PPO Single-Target Baseline Model
 
@@ -201,8 +202,10 @@ The data for each model was collected by averaging 100 eval episodes, and the re
 
 4. PPO Sentence Transformer Model (eval on unseen text instructions)
 
-|"mine the diamond block"|"break the wood block"|"bdestroy the blue clay block"|
+|"mine the diamond block"|"break the wood block"|"destroy the blue clay block"|
 | -------- | -------- | -------- |
+|<img width="400" height="300" src="imgs/block_breaking/unseen_diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/unseen_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/unseen_clay.gif" />|
+|Success rate: 89%, Average reward: 79.99, Average steps: 26.37|Success rate: 82%, Average reward: 75.77, Average steps: 28.96|Success rate: 94%, Average reward: 83.16, Average steps: 30.22|
 ---
 
 ## Miscellaneous
