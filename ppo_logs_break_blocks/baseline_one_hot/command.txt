@@ -1,0 +1,7 @@
+eval
+
+"break the diamond ore"
+"break the log"
+"break the clay"
+
+python train/train_ppo.py --mission missions/multi_target_break_blocks_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_break_blocks_one_hot.py --model-path ppo_logs_break_blocks/baseline_one_hot/ppo_20000_steps.zip --projection --random --eval --episodes 10 --instruction "break the diamond ore"

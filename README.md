@@ -175,23 +175,34 @@ python train/train_ppo.py --mission missions/multi_target_break_blocks_single_ag
 <img width="1500" height="750" alt="steps_curve" src="imgs/block_breaking/steps.png" />
 
 #### Recording
+The data for each model was collected by averaging 100 eval episodes, and the recordings are just for reference, not the actual 100-episode run.
+
 1. PPO Single-Target Baseline Model
 
 |diamond ore|log|clay|
 | -------- | -------- | -------- |
 |<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/clay.gif" />|
+|Success rate: 100%, Average reward: 95.38, Average steps: 18.67|Success rate: 100%, Average reward: 96.00, Average steps: 17.83|Success rate: 100%, Average reward: 92.94, Average steps: 18.98|
 
 2. PPO One-Hot Baseline Model
 
 |[1, 0, 0] (diamond)|[0, 1, 0] (log)|[0, 0, 1] (clay)|
 | -------- | -------- | -------- |
 |<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/clay.gif" />|
+|Success rate: 100%, Average reward: 90.63, Average steps: 20.77|Success rate: 99%, Average reward: 95.24, Average steps: 18.61|Success rate: 100%, Average reward: 92.99, Average steps: 21.88|
 
-3. PPO Sentence Transformer Model
+
+3. PPO Sentence Transformer Model (eval on trained instructions)
 
 |"break the diamond ore"|"break the log"|"break the clay"|
 | -------- | -------- | -------- |
 |<img width="400" height="300" src="imgs/block_breaking/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/clay.gif" />|
+|Success rate: 100%, Average reward: 90.76, Average steps: 23.86|Success rate: 100%, Average reward: 92.61, Average steps: 21.88|Success rate: 99%, Average reward: 91.26, Average steps: 22.95|
+
+4. PPO Sentence Transformer Model (eval on unseen text instructions)
+
+|"mine the diamond block"|"break the wood block"|"bdestroy the blue clay block"|
+| -------- | -------- | -------- |
 ---
 
 ## Miscellaneous
