@@ -136,7 +136,7 @@ python train/train_ppo.py --mission missions/place_item/place_item_farm_single_a
 ##### 150k to 200k
 <img width="1500" height="750" alt="reward_curve_200k" src="images/random_target_close_to_200k/reward_curve_by_target.png" />
 <img width="1500" height="750" alt="steps_curve_200k" src="images/random_target_close_to_200k/steps_curve_by_target.png" />
-<img width="1500" height="750" alt="success_rate_curve_200k" src="images/random_target_close_to_200k/success_rate_curve_by_target.png" />v
+<img width="1500" height="750" alt="success_rate_curve_200k" src="images/random_target_close_to_200k/success_rate_curve_by_target.png" />
 
 #### Recording
 1. PPO Sentence Transformer Model
