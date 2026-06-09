@@ -61,10 +61,10 @@ The original sample scripts and missions are located in `MalmoPlatform/MalmoEnv/
 
 
 ## Training PPO Agent
-### Single Target
+### Example training command
 
 ```bash
-python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --total-timesteps 100000 --model-path ppo_logs/out1/ --task-py train/tasks/mob_chase.py > ppo_logs/out1/out.txt
+python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 150000   --model-path ppo_logs/place_item_test/random_target/   --task-py train/tasks/place_item_farming.py   --projection   > ppo_logs/place_item_test/random_target/out.txt
 ```
 `--mission` is the mission.xml file
 
@@ -76,22 +76,10 @@ python -u train/train_ppo.py --mission missions/mob_chase_single_agent.xml --epi
 
 `--task-py` is an additional (and required) custom task file that handles building state and shapping reward. See `train/tasks/mob_chase.py` as an example
 
-
-### Multi-Target
-```bash
-python -u train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --total-timesteps 150000 --model-path ppo_logs/out1/ --task-py train/tasks/multi_target_navigation.py --projection > ppo_logs/out1/out.txt
-```
-
-The training command for multi-target tasks is the mostly same. Just change the `--task-py` and `--mission` accordingly
-
-`--projection` is an optional argument for enabling the projection layer that projects the text instruction through trainable MLP instead of passing the raw encoded embedding into the PPO network
-
-Note that current multi-target setup might requires more timesteps. It's recommended to set `--total-timesteps` to 150000 for tasks like `multi_target_navigation.py` just in case it takes more steps to train, but you can always end early as needed
-
----
+`--resume-from` loads an existing checkpoint and continues to train on top
 
 ## Evaluating PPO Agent
-### Single Target
+### Example evaluation command
 
 ```bash
 python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/mob_chase.py --model-path ppo_logs/out1/ppo_final.zip --task-py train/tasks/mob_chase.py --eval --episodes 5
@@ -107,36 +95,55 @@ python train/train_ppo.py --mission missions/mob_chase_single_agent.xml --episod
 
 `--record` optionally records the evluation and saves as GIF
 
-In cases where the agent performs poorly due to bad policy learning given imperfect reward shaping, you can try changing `deterministic` to `False` in `train_ppo.py` to allow the agent to take some random actions during evaluation. Not ideal, but performs better is some cases
+---
+## Known Issues
+### 1. Empty info returned by Malmo
+Current RL implementation rely soley on info returned by Malmo for state info such as grid observations. However, Malmo frequently return empty info dict possibly due to Python-Minecraft synchronization issue related to Malmo. The current workaround is simply to return the previous state and skip reward shaping for that step.
 
-### Multi-Target
+*Note that the very first observation info only becomes available after executing the first action/step, so a env.step(0), usually a move forward action depending on your custom action space, is added at the very begining of each reset to obtain the info state.
+
+
+---
+
+## Missions
+### place_item_farming.py (multi-target)
+#### Training Command
+The per-episode xml reloading implementation causes Malmo to lag early or even crash during long runs. It's recommended to only run up to 200k (or even fewer) steps, depending on number of episodes/resets, and restart Malmo and continue from the previous checkpoint.
+
+Run 1:
+```bash
+python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 150000   --model-path ppo_logs/place_item_test/random_target/   --task-py train/tasks/place_item_farming.py  --projection   > ppo_logs/place_item_test/random_target/out.txt
+```
+
+Run 2, continue from the 100k checkpoint:
 
 ```bash
-python train/train_ppo.py --mission missions/multi_target_single_agent.xml --episodemaxsteps 100 --task-py train/tasks/multi_target_navigation.py --model-path ppo_logs/out13/ppo_65000_steps.zip --projection --eval --episodes 5 --instruction "go to the pig" 
+python -u train/train_ppo.py --mission missions/place_item/place_item_farm_single_agent.xml --episodemaxsteps 200 --total-timesteps 50000 --model-path ppo_logs/place_item_test/continue_to_200k/ --resume-from ppo_logs/place_item_test/random_target/ppo_final.zip --task-py train/tasks/place_item_farming.py --projection > ppo_logs/place_item_test/continue_to_200k/out.txt
 ```
-Mostly the same as single target eval, except:
 
-`--projection` need to be consistent with training
+#### Evaluation Command
 
-`--instruction` need to pass in the text instruction for multi-target evaluation
+```bash
+python train/train_ppo.py --mission missions/place_item/place_item_farm_single_agent.xml --episodemaxsteps 200 --task-py train/tasks/place_item_farming.py --model-path ppo_logs/place_item_test/continue_to_200k/ppo_final.zip --projection --eval --episodes 5 --instruction "grow potato" 
+```
+#### Learning plot
 
-## Example Recording
-### mob_chase
-<img width="160" height="120" alt="episode_0_reward_51 46" src="https://github.com/user-attachments/assets/da12f77a-0249-4188-a54c-99509444537f" />
-<img width="160" height="120" alt="episode_1_reward_47 32" src="https://github.com/user-attachments/assets/31c95dcf-080a-4e96-9f0f-fa0b80999bb6" />
+##### Up to 150k
+<img width="1500" height="750" alt="reward_curve_150k" src="images/random_target_150k/reward_curve_by_target.png" />
+<img width="1500" height="750" alt="steps_curve_150k" src="images/random_target_150k/steps_curve_by_target.png" />
+<img width="1500" height="750" alt="success_rate_curve_150k" src="images/random_target_150k/success_rate_curve_by_target.png" />
 
-### multi_target_navigation
-|"go to the pig"|"go to the log"|"go to the emerald"|
+##### 150k to 200k
+<img width="1500" height="750" alt="reward_curve_200k" src="images/random_target_close_to_200k/reward_curve_by_target.png" />
+<img width="1500" height="750" alt="steps_curve_200k" src="images/random_target_close_to_200k/steps_curve_by_target.png" />
+<img width="1500" height="750" alt="success_rate_curve_200k" src="images/random_target_close_to_200k/success_rate_curve_by_target.png" />v
+
+#### Recording
+1. PPO Sentence Transformer Model
+|potato|wheat|carrot|
 | -------- | -------- | -------- |
-|<img width="160" height="120" alt="episode_0_reward_48 05" src="https://github.com/user-attachments/assets/b13984b9-0120-4780-ba5a-03c337b70104" />|<img width="160" height="120" alt="episode_0_reward_51 02" src="https://github.com/user-attachments/assets/a3f11098-c3dc-4157-89d9-142b889c8799" />|<img width="160" height="120" alt="episode_0_reward_41 58" src="https://github.com/user-attachments/assets/51485fcb-8668-44c0-9889-7afb225e43d3" />|
+|<img width="1500" height="750" alt="grow_potato" src="images/grow_potato.gif" />|<img width="1500" height="750" alt="plant_wheat" src="images/plant_wheat.gif" />|<img width="1500" height="750" alt="place_carrot_seed" src="images/place_the_carrot_seed.gif" />v
 
-## Example learning plot
-### multi_target_navigation
-
-<img width="1500" height="750" alt="reward_curve" src="https://github.com/user-attachments/assets/8dbd5fe0-482e-4537-a261-0c19e195bdca" />
-<img width="1500" height="750" alt="steps_curve" src="https://github.com/user-attachments/assets/3b2fc9f8-9191-44db-9f8f-59e6736a1284" />
-
-This run was from the "Add obstacle states" commit. The best model appears to be the 57500_steps checkpoint, and the learning started to drift away after that
 
 ---
 
@@ -163,7 +170,7 @@ To change Minecraft memory allocation, go to the downloaded `MalmoPlatform/Minec
 
 
 
-## Personal training for farming:
+## Personal command for farming:
 
 create virtual environment:
 
@@ -175,4 +182,23 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
 export PATH="$JAVA_HOME/bin:$PATH"
 
 run training:
-python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 300000   --model-path ppo_logs/place_item_test/   --task-py train/tasks/place_item_farming.py   --projection   > ppo_logs/place_item_test/out.txt
+python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 50000   --model-path ppo_logs/place_item_test/base_potato/   --task-py train/tasks/place_item_farming_single_target.py   --projection   > ppo_logs/place_item_test/base_potato/out.txt
+
+random target:
+python -u train/train_ppo.py   --mission missions/place_item/place_item_farm_single_agent.xml   --episodemaxsteps 200   --total-timesteps 150000   --model-path ppo_logs/place_item_test/random_target/   --task-py train/tasks/place_item_farming.py   --projection   > ppo_logs/place_item_test/random_target/out.txt
+
+continue training
+python -u train/train_ppo.py \
+  --mission missions/place_item/place_item_farm_single_agent.xml \
+  --episodemaxsteps 200 \
+  --total-timesteps 50000 \
+  --model-path ppo_logs/place_item_test/continue_to_200k/ \
+  --resume-from ppo_logs/place_item_test/random_target/ppo_final.zip \
+  --task-py train/tasks/place_item_farming.py \
+  --projection \
+  > ppo_logs/place_item_test/continue_to_200k/out.txt
+
+eval:
+python train/train_ppo.py --mission missions/place_item/place_item_farm_single_agent.xml --episodemaxsteps 200 --task-py train/tasks/place_item_farming.py --model-path final_model/plant_farming/ppo_182516_steps.zip --projection --eval --episodes 5 --instruction "place the carrot seed" 
+
+ffmpeg -i "QQ20260609-042459-HD.mp4" -vf "fps=12,scale=720:-1:flags=lanczos" "minecraft_record.gif"
