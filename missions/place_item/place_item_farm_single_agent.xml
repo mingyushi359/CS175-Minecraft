@@ -109,8 +109,8 @@
             <RewardForSendingCommand reward="-0.01" />
 
             <VideoProducer want_depth="false">
-                <Width>160</Width>
-                <Height>120</Height>
+                <Width>400</Width>
+                <Height>300</Height>
             </VideoProducer>
         </AgentHandlers>
     </AgentSection>
