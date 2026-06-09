@@ -175,35 +175,23 @@ python train/train_ppo.py --mission missions/multi_target_break_blocks_single_ag
 <img width="1500" height="750" alt="steps_curve" src="imgs/block_breaking/steps.png" />
 
 #### Recording
-1. PPO Sentence Transformer Model
+1. PPO Single-Target Baseline Model
+
+|diamond ore|log|clay|
+| -------- | -------- | -------- |
+|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/clay.gif" />|
+
+2. PPO One-Hot Baseline Model
+
+|[1, 0, 0] (diamond)|[0, 1, 0] (log)|[0, 0, 1] (clay)|
+| -------- | -------- | -------- |
+|<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_one_hot/clay.gif" />|
+
+3. PPO Sentence Transformer Model
 
 |"break the diamond ore"|"break the log"|"break the clay"|
 | -------- | -------- | -------- |
 |<img width="400" height="300" src="imgs/block_breaking/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/clay.gif" />|
-
-2. PPO Single-Target Baseline Model
-
-|"break the diamond ore"|"break the log"|"break the clay"|
-| -------- | -------- | -------- |
-|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/diamond.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/wood_log.gif" />|<img width="400" height="300" src="imgs/block_breaking/baseline_single_target/clay.gif" />|
-
-
----
-
-## Training DQN Agent
-
-`train_dqn.py` still have issues and not properly learning, only use it as a reference
-
-```bash
-python train/train_dqn.py --mission missions/reach_target_single_agent.xml --task train/tasks/mob_chase.py --episodes 700 --episodemaxsteps 100 --model-path q_model
-```
-
-## Evaluating DQN Agent
-
-```bash
-python train/train_dqn.py --mission missions/reach_target_single_agent.xml --eval --task train/tasks/mob_chase.py --episodes 5 --episodemaxsteps 100 --model-path q_model
-```
-
 ---
 
 ## Miscellaneous
